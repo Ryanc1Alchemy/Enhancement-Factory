@@ -38,7 +38,7 @@ const MODEL = 'claude-sonnet-4-5-20250929';
 // Build the conversation messages array for Claude.
 // We replay accepted prior artifacts as assistant tool_use blocks so the agent has
 // full context, but we only expose the current gate's tool in the tools array.
-function buildMessages({ request, prior_artifacts, gate, mode, feedback, previous_artifact }) {
+function buildMessages({ request, prior_artifacts, gate, mode, feedback, previous_artifact, data_dictionary }) {
   const messages = [];
 
   // Initial user message — the request itself, set up so the agent has the
@@ -47,6 +47,35 @@ function buildMessages({ request, prior_artifacts, gate, mode, feedback, previou
     role: 'user',
     content: `New enhancement request from a Guidewire client:\n\n"${request}"\n\nWe will work through the six gates one at a time. I will tell you when to start each gate.`
   });
+
+  // If the client uploaded actual Guidewire Studio configuration artifacts —
+  // data dictionary, PCF screens, Gosu rules, product model patterns, and/or
+  // rating data — ground the agent in the REAL configuration instead of
+  // generic Guidewire knowledge. The `data_dictionary` field name is kept for
+  // backend/API compatibility, but its content is now a combined multi-area
+  // summary (see src/lib/guidewireArtifactBundle.js) — it may contain any
+  // mix of "## DATA DICTIONARY", "## PCF SCREENS", "## GOSU RULES",
+  // "## PRODUCT MODEL", and "## RATING" sections depending on what the user
+  // attached. This is injected once, early in the conversation, so it's
+  // available context for every gate (grounding matters most at gates 1 and 3).
+  if (data_dictionary) {
+    messages.push({
+      role: 'user',
+      content:
+        `The client has also provided exports of their actual Guidewire Studio configuration. ` +
+        `This may include the data dictionary (entities/typelists), PCF screens (UI), Gosu rules ` +
+        `(business logic), product model patterns (coverages/exclusions/conditions/modifiers), ` +
+        `and/or rating data (rate tables/routines/factors) — sections below are labelled by area. ` +
+        `Use this to ground your analysis in their REAL configuration rather than generic ` +
+        `assumptions. If the request references something not present in any provided artifact, ` +
+        `say so explicitly as an assumption or ambiguity rather than inventing it.\n\n` +
+        `--- GUIDEWIRE CONFIGURATION ARTIFACTS (parsed excerpt) ---\n${data_dictionary}\n--- END GUIDEWIRE CONFIGURATION ARTIFACTS ---`
+    });
+    messages.push({
+      role: 'assistant',
+      content: 'Acknowledged. I will ground my analysis in the provided Guidewire configuration artifacts where relevant, and flag anything the request touches that is not covered by them.'
+    });
+  }
 
   // Replay prior gates as a compact transcript so the agent has context without
   // trying to re-emit prior tool calls (which would confuse the schema).
@@ -126,7 +155,7 @@ export default async function handler(req, res) {
     return errorResponse(res, 400, 'Bad request', err.message);
   }
 
-  const { mode = 'advance', gate, request, prior_artifacts = {}, feedback, previous_artifact } = body;
+  const { mode = 'advance', gate, request, prior_artifacts = {}, feedback, previous_artifact, data_dictionary } = body;
 
   if (!gate || !request) {
     return errorResponse(res, 400, 'gate and request are required');
@@ -156,7 +185,7 @@ export default async function handler(req, res) {
     return errorResponse(res, 400, `No tool available for gate ${gate}`);
   }
 
-  const messages = buildMessages({ request, prior_artifacts, gate, mode, feedback, previous_artifact });
+  const messages = buildMessages({ request, prior_artifacts, gate, mode, feedback, previous_artifact, data_dictionary });
 
   let response;
   try {

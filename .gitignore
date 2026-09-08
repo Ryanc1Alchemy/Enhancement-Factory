@@ -1,0 +1,22 @@
+# graphify-axet (AI tooling metadata, not part of the app)
+.graphify/
+.graphifyignore
+
+# dependencies
+node_modules/
+
+# environment / secrets
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+server.log
+
+# build output
+dist/
+build/
+
+# misc generated/empty scratch files
+filelist.txt

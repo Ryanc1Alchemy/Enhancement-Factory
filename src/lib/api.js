@@ -30,22 +30,24 @@ async function getJSON(url) {
 
 export const api = {
   agent: {
-    advance({ gate, request, prior_artifacts }) {
+    advance({ gate, request, prior_artifacts, data_dictionary }) {
       return postJSON('/api/agent', {
         mode: 'advance',
         gate,
         request,
-        prior_artifacts
+        prior_artifacts,
+        data_dictionary
       });
     },
-    regenerate({ gate, request, prior_artifacts, feedback, previous_artifact }) {
+    regenerate({ gate, request, prior_artifacts, feedback, previous_artifact, data_dictionary }) {
       return postJSON('/api/agent', {
         mode: 'regenerate',
         gate,
         request,
         prior_artifacts,
         feedback,
-        previous_artifact
+        previous_artifact,
+        data_dictionary
       });
     },
     commitJira({ request, prior_artifacts }) {

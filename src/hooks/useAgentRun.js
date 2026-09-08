@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { api, newRunId } from '../lib/api.js';
 import { STATES } from '../lib/gates.js';
+import { buildBundleSummaryForRequest, describeBundle } from '../lib/guidewireArtifactBundle.js';
 
 // useRef for always-fresh values (per established learning — avoids stale closure bugs in persistence)
 // Async background save to /api/runs that does not block the UI
@@ -16,6 +17,7 @@ const initialState = {
   previousArtifacts: {}, // pre-regeneration artifact (for diff view)
   conversation: [], // array of { who: 'system'|'user'|'agent', body: string, ts }
   jiraResult: null, // result of /api/runs commit_jira
+  guidewireBundle: null, // parsed multi-area Guidewire Studio bundle (optional, attached at start)
   busy: false,
   error: null
 };
@@ -65,16 +67,21 @@ export function useAgentRun() {
   }, [log]);
 
   // ------------ start a new run ------------
-  const startRun = useCallback(async (request) => {
+  const startRun = useCallback(async (request, guidewireBundle) => {
     if (!request || !request.trim()) return;
     const trimmed = request.trim();
     const runId = newRunId();
+    const bundleLines = guidewireBundle ? describeBundle(guidewireBundle) : [];
     setState({
       ...initialState,
       runId,
       request: trimmed,
+      guidewireBundle: guidewireBundle || null,
       conversation: [
         { who: 'user', body: trimmed, ts: Date.now() },
+        ...(bundleLines.length > 0
+          ? [{ who: 'system', body: `Guidewire artifacts attached: ${bundleLines.join(' · ')}.`, ts: Date.now() }]
+          : []),
         { who: 'system', body: 'Agent starting at gate 1 — Request Analysis…', ts: Date.now() }
       ],
       gateStates: { ...initialState.gateStates, 1: STATES.REGENERATING },
@@ -85,7 +92,8 @@ export function useAgentRun() {
       const res = await api.agent.advance({
         gate: 1,
         request: trimmed,
-        prior_artifacts: {}
+        prior_artifacts: {},
+        data_dictionary: guidewireBundle ? buildBundleSummaryForRequest(guidewireBundle, trimmed) : null
       });
       setState(s => ({
         ...s,
@@ -128,7 +136,8 @@ export function useAgentRun() {
         const res = await api.agent.advance({
           gate: gate + 1,
           request: s.request,
-          prior_artifacts: newAccepted
+          prior_artifacts: newAccepted,
+          data_dictionary: s.guidewireBundle ? buildBundleSummaryForRequest(s.guidewireBundle, s.request) : null
         });
         setState(prev => ({
           ...prev,
@@ -210,7 +219,8 @@ export function useAgentRun() {
         request: s.request,
         prior_artifacts: s.acceptedArtifacts,
         feedback,
-        previous_artifact: previous
+        previous_artifact: previous,
+        data_dictionary: s.guidewireBundle ? buildBundleSummaryForRequest(s.guidewireBundle, `${s.request} ${feedback}`) : null
       });
       setState(prev => ({
         ...prev,

@@ -9,7 +9,13 @@ The client has provided this enhancement request:
 
   "{REQUEST}"
 
-Analyse it. Surface the ambiguities — do NOT silently fill them in. The most valuable thing you can do here is identify what the human needs to clarify before this enhancement can be safely scoped. State your assumptions and confidence honestly. Use the produce_request_analysis tool.`,
+Analyse it. Surface the ambiguities — do NOT silently fill them in. The most valuable thing you can do here is identify what the human needs to clarify before this enhancement can be safely scoped. State your assumptions and confidence honestly.
+
+If Guidewire configuration artifacts were provided earlier in this conversation (data dictionary, PCF screens, Gosu rules, product model patterns, or rating data), cross-reference the request against them: name the SPECIFIC entities/fields/typelists, screens, rules, coverage/exclusion/modifier patterns, or rate factors that are affected. If the request implies something not present in the provided artifacts, raise that as an assumption or ambiguity rather than guessing. If no artifacts were provided, proceed on generic Guidewire domain knowledge as usual.
+
+IMPORTANT — rating impact can never be confirmed from file-based artifacts. Verified against real Guidewire RateBook export XML: <RateTable> elements contain only a Checksum (opaque hash), a Definition reference (table schema/columns only), and a QueryStrategy — never actual factor/rate VALUE rows. Rate values only exist in the runtime Guidewire database, never in any file-based config export available to this agent. Therefore, if the request touches rating in ANY way (pricing, discounts, premium calculation, rate factors, rate tables), you MUST raise rating impact as an evidence gap requiring live-environment verification (Rate Management UI / actuarial sign-off) — regardless of whether rating files were attached. You MUST NEVER assert that "no rating change is required" or otherwise imply rating impact has been assessed or ruled out — that conclusion is not derivable from anything this agent can access.
+
+Use the produce_request_analysis tool.`,
 
   2: `GATE 2 — Scope Definition.
 
@@ -21,7 +27,13 @@ Be deliberate about what you put in "out_of_scope" — this protects the estimat
 
 You have approved scope at gate 2. Now produce the design note in NTT DATA house style.
 
-Name SPECIFIC Guidewire entities, typelist patterns, PCFs (by file pattern e.g., PolicyInfoDV.pcf), Gosu rule categories, and integrations. Avoid generic statements. If the change has rating impact, flag it explicitly — rating changes are higher-risk. Use the produce_design_note tool.`,
+Name SPECIFIC Guidewire entities, typelist patterns, PCFs (by file pattern e.g., PolicyInfoDV.pcf), Gosu rule categories, and integrations. Avoid generic statements. If the change has rating impact, flag it explicitly — rating changes are higher-risk.
+
+If PCF screens were provided earlier in this conversation, reference the ACTUAL screen name(s) and control bindings affected rather than a generic PCF file pattern. If Gosu rules were provided, reference the ACTUAL rule name(s) and category rather than a generic rule category. If product model patterns (coverage/exclusion/condition/modifier) were provided, reference the ACTUAL pattern name(s) and terms affected. If rating data (rate tables/routines/factors) was provided, reference the ACTUAL factor/table names affected rather than describing rating impact abstractly. Where the request touches something not present in any provided artifact, say so explicitly rather than inventing a plausible-sounding name.
+
+IMPORTANT — typecode values are NOT derivable from display names. If the request asks to add a new typelist value (e.g. a new dog breed, severity level, discount tier), you must NOT invent a Code identifier by transforming the requested display name (no case-folding, no space-stripping, no assumption that "Dachshund" implies Code="Dachshund"). Verified against real Guidewire typelists: codes bear no reliable structural relationship to their display Name (e.g. Code="Bulldog" has Name="BLUE BLOOD BULLDOG"; Code="Husky" has Name="ALASKAN HUSKY"). If the exact Code value the client wants is not explicitly stated, this is a genuine ambiguity — surface it rather than guessing.
+
+Use the produce_design_note tool.`,
 
   4: `GATE 4 — Effort Estimate.
 

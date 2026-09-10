@@ -115,6 +115,30 @@ export function renderGate3(a) {
         </div>
       )}
 
+      {a.gold_escalation_flag && (
+        <div className="callout warn">
+          <strong>Gold escalation flagged:</strong> {a.gold_escalation_reason}
+        </div>
+      )}
+
+      {(a.entity_drift_warnings || []).length > 0 && (
+        <div className="callout warn">
+          <strong>Entity drift vs. gate 1:</strong>
+          <ul className="artifact-list" style={{ marginTop: 4 }}>
+            {a.entity_drift_warnings.map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {(a.required_skills || []).length > 0 && (
+        <div className="artifact-section">
+          <span className="artifact-label">Required skills (org skills matrix)</span>
+          <div>
+            {a.required_skills.map((s, i) => <span key={i} className="artifact-pill">{s}</span>)}
+          </div>
+        </div>
+      )}
+
       {(a.entity_changes || []).length > 0 && (
         <ChangeTable label="Entity changes" rows={a.entity_changes} cols={['entity', 'change_type', 'description']} />
       )}

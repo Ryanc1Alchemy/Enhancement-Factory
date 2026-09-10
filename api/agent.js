@@ -5,6 +5,7 @@ import { buildGateInstruction, buildRegenerationInstruction } from './_lib/promp
 import { getToolsForGate, GATE_NAMES } from './_lib/schemas.js';
 import { compute as computeEstimate } from './estimate.js';
 import { createTicket } from './jira.js';
+import { GOLD_ONLY_SKILLS } from './_lib/skillsMatrix.js';
 
 // ============================================================
 // /api/agent.js — master agent orchestrator
@@ -202,6 +203,53 @@ export default async function handler(req, res) {
   }
 
   let artifact = toolBlock.input;
+
+  // ---------- Gate 3: flag entities introduced that weren't flagged at gate 1 ----------
+  // Free consistency check — no new inputs, no risk of false positives beyond a
+  // simple name comparison. Gate 1's affected_entities is the human-reviewed
+  // baseline; if gate 3's design introduces something not in that list, that's
+  // worth a human's attention even though it may well be legitimate (gate 1
+  // isn't always exhaustive). This never blocks — it only surfaces a warning
+  // on the artifact for the UI to render.
+  if (gate === 3 && artifact && Array.isArray(artifact.entity_changes)) {
+    const gate1Entities = new Set(
+      (prior_artifacts?.[1]?.affected_entities || []).map(e => String(e).toLowerCase().trim())
+    );
+    const driftedEntities = artifact.entity_changes
+      .map(ec => ec.entity)
+      .filter(Boolean)
+      .filter(entity => !gate1Entities.has(String(entity).toLowerCase().trim()));
+    // De-duplicate while preserving order.
+    const uniqueDrifted = [...new Set(driftedEntities)];
+    if (uniqueDrifted.length > 0) {
+      artifact = {
+        ...artifact,
+        entity_drift_warnings: uniqueDrifted.map(
+          entity => `"${entity}" was not listed in gate 1's affected entities — confirm this is intentional.`
+        )
+      };
+    }
+  }
+
+  // ---------- Gate 3: Gold escalation flag ----------
+  // A small, fixed set of skills in the org's skills matrix are only realistic
+  // at Gold level (Target Score is N/A through Silver2, only actually targeted
+  // starting at Gold — see api/_lib/skillsMatrix.js). If the design note's
+  // tagged required_skills include any of these, that's a genuine "this needs
+  // a senior on it" signal the app previously had no mechanism to surface.
+  // This is a pure derived flag — no new inputs, cited against the matrix.
+  if (gate === 3 && artifact && Array.isArray(artifact.required_skills)) {
+    const matchedGoldSkills = artifact.required_skills.filter(skillId => GOLD_ONLY_SKILLS.includes(skillId));
+    if (matchedGoldSkills.length > 0) {
+      artifact = {
+        ...artifact,
+        gold_escalation_flag: true,
+        gold_escalation_reason:
+          `This design requires skill(s) that the org's skills matrix only targets from Gold level onward: ` +
+          `${matchedGoldSkills.join(', ')}. Recommend Gold-level involvement before committing to this estimate.`
+      };
+    }
+  }
 
   // ---------- Gate 4: enrich agent's complexity inputs with computed estimate ----------
   if (gate === 4 && artifact && artifact.complexity_inputs) {

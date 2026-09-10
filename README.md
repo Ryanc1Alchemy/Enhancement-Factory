@@ -44,8 +44,15 @@ Settings → Environment Variables. Add:
 | `JIRA_EMAIL` | Real Jira tickets at gate 6 | `bot@nttdata.com` |
 | `JIRA_API_TOKEN` | Real Jira tickets at gate 6 | `ATATT...` |
 | `JIRA_PROJECT_KEY` | Real Jira tickets at gate 6 | `GWDEMO` |
+| `JIRA_STORY_POINTS_FIELD` | Optional — Jira story points custom field | `customfield_10016` (default if unset) |
+| `RUNS_API_SECRET` | Optional — restricts `/api/runs` to callers with a matching secret | any random string |
+| `VITE_RUNS_API_SECRET` | Frontend build-time value matching `RUNS_API_SECRET` | same value as above |
 
 **Graceful degradation**: only `ANTHROPIC_API_KEY` is strictly required. Without `DATABASE_URL`, runs aren't persisted but the agent works. Without the JIRA vars, gate 6 produces a simulated payload (the demo still ends with a complete ticket spec).
+
+**Security note**: `/api/runs` (which exposes saved enhancement requests, including any attached data dictionary/BA notes content) has NO authentication unless `RUNS_API_SECRET` is set. For any deployment beyond local development, set `RUNS_API_SECRET` (backend) and `VITE_RUNS_API_SECRET` (frontend build, matching value) to restrict access to this endpoint.
+
+**Jira story points field**: Jira Cloud sites do not share a common custom field ID for story points — `customfield_10016` is a common default but is specific to the original Jira project this was built against. If reusing this app for a different client's Jira instance and story points aren't appearing on created tickets, set `JIRA_STORY_POINTS_FIELD` to that instance's actual story points field ID.
 
 ### 4. Initialise the database (if using DATABASE_URL)
 

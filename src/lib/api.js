@@ -1,9 +1,15 @@
 // Frontend API client. Thin wrapper over the four backend endpoints.
 
-async function postJSON(url, body) {
+// Optional shared-secret sent to /api/runs when the backend has RUNS_API_SECRET
+// configured (see api/runs.js). Set VITE_RUNS_API_SECRET in the frontend build
+// env to match. If unset, this header is simply omitted and the backend falls
+// back to its own unauthenticated default (see api/runs.js comments).
+const RUNS_API_SECRET = import.meta.env.VITE_RUNS_API_SECRET || '';
+
+async function postJSON(url, body, extraHeaders) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(extraHeaders || {}) },
     body: JSON.stringify(body)
   });
   const data = await res.json().catch(() => ({}));
@@ -17,8 +23,8 @@ async function postJSON(url, body) {
   return data;
 }
 
-async function getJSON(url) {
-  const res = await fetch(url);
+async function getJSON(url, extraHeaders) {
+  const res = await fetch(url, { headers: extraHeaders || {} });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(data?.error || `HTTP ${res.status}`);
@@ -26,6 +32,10 @@ async function getJSON(url) {
     throw err;
   }
   return data;
+}
+
+function runsAuthHeaders() {
+  return RUNS_API_SECRET ? { 'x-runs-secret': RUNS_API_SECRET } : {};
 }
 
 export const api = {
@@ -60,9 +70,9 @@ export const api = {
     }
   },
   runs: {
-    save(run) { return postJSON('/api/runs?action=save', run); },
-    get(id) { return getJSON(`/api/runs?action=get&id=${encodeURIComponent(id)}`); },
-    list() { return getJSON('/api/runs?action=list'); }
+    save(run) { return postJSON('/api/runs?action=save', run, runsAuthHeaders()); },
+    get(id) { return getJSON(`/api/runs?action=get&id=${encodeURIComponent(id)}`, runsAuthHeaders()); },
+    list() { return getJSON('/api/runs?action=list', runsAuthHeaders()); }
   }
 };
 

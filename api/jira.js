@@ -76,11 +76,15 @@ export async function createTicket(payload) {
     }
   };
 
-  // Story points custom field varies by Jira instance. Common: customfield_10016.
-  // We attempt it but tolerate failure if it's not the right field.
+  // Story points custom field varies by Jira instance — there is no universal
+  // field ID across Jira Cloud sites. customfield_10016 is a common default,
+  // but configurable via JIRA_STORY_POINTS_FIELD so this can be reused for a
+  // different client's Jira project without a code change. We still tolerate
+  // failure (fallback below) if it's not the right field for a given site.
+  const storyPointsField = process.env.JIRA_STORY_POINTS_FIELD || 'customfield_10016';
   const tryWithStoryPoints = {
     ...body,
-    fields: { ...body.fields, customfield_10016: payload.story_points }
+    fields: { ...body.fields, [storyPointsField]: payload.story_points }
   };
 
   let response;

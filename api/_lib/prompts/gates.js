@@ -2,6 +2,8 @@
 // for each gate by combining (a) the gate-specific instruction, (b) prior artifacts
 // for context, and (c) any user feedback if regenerating.
 
+import { buildSkillsRubricText } from '../skillsMatrix.js';
+
 export const GATE_INSTRUCTIONS = {
   1: `GATE 1 — Request Analysis.
 
@@ -37,6 +39,10 @@ If PCF screens were provided earlier in this conversation, reference the ACTUAL 
 
 IMPORTANT — typecode values are NOT derivable from display names. If the request asks to add a new typelist value (e.g. a new dog breed, severity level, discount tier), you must NOT invent a Code identifier by transforming the requested display name (no case-folding, no space-stripping, no assumption that "Dachshund" implies Code="Dachshund"). Verified against real Guidewire typelists: codes bear no reliable structural relationship to their display Name (e.g. Code="Bulldog" has Name="BLUE BLOOD BULLDOG"; Code="Husky" has Name="ALASKAN HUSKY"). If the exact Code value the client wants is not explicitly stated, this is a genuine ambiguity — surface it rather than guessing.
 
+SKILL TAGGING — the org maintains a controlled skills matrix used to staff and grade delivery work. Tag "required_skills" with every skill ID from the list below that this design genuinely requires — use the "what this means" text as your rubric for whether a skill applies. Do NOT tag a skill just because it's tangentially related; only tag skills the design note actually calls for. This becomes structured data used for staffing decisions and Jira labels downstream, so precision matters more than breadth. Use the EXACT skill ID (the value before the parenthesis), not the display name.
+
+{SKILLS_RUBRIC}
+
 Use the produce_design_note tool.`,
 
   4: `GATE 4 — Effort Estimate.
@@ -64,7 +70,12 @@ The user has explicitly approved the draft payload. Now call raise_jira_ticket w
 
 export function buildGateInstruction(gate, request) {
   const tpl = GATE_INSTRUCTIONS[gate];
-  return tpl ? tpl.replace('{REQUEST}', request || '') : '';
+  if (!tpl) return '';
+  let instruction = tpl.replace('{REQUEST}', request || '');
+  if (instruction.includes('{SKILLS_RUBRIC}')) {
+    instruction = instruction.replace('{SKILLS_RUBRIC}', buildSkillsRubricText());
+  }
+  return instruction;
 }
 
 export function buildRegenerationInstruction(gate, feedback, previousArtifact) {

@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { SCENARIOS } from '../lib/scenarios.js';
 import { parseGuidewireBundle, describeBundle } from '../lib/guidewireArtifactBundle.js';
 
-const ACCEPTED_EXTENSIONS = '.html,.htm,.json,.xml,.csv,.md,.markdown,.txt,.pcf,.gs,.gsx';
+const ACCEPTED_EXTENSIONS = '.html,.htm,.json,.xml,.csv,.md,.markdown,.txt,.pcf,.gs,.gsx,.docx,.pdf,.xlsx,.xls,.vtt,.srt';
 
 export default function RequestInput({ onSubmit, disabled, started }) {
   const [text, setText] = useState('');
@@ -97,7 +97,7 @@ export default function RequestInput({ onSubmit, disabled, started }) {
 
       <div className="data-dict-upload" style={{ marginTop: 10 }}>
         <label className="btn btn-ghost btn-sm" style={{ cursor: disabled || parsing ? 'not-allowed' : 'pointer' }}>
-          {parsing ? 'Parsing…' : attachedFileNames.length > 0 ? '+ Attach another Guidewire file' : '+ Attach Guidewire Studio files (data dictionary, PCF, rules, product model, rating)'}
+          {parsing ? 'Parsing…' : attachedFileNames.length > 0 ? '+ Attach another file' : '+ Attach files (data dictionary, PCF, rules, product model, rating, or BA notes/Word/PDF/Excel/Teams transcript)'}
           <input
             ref={fileInputRef}
             type="file"
@@ -143,7 +143,7 @@ export default function RequestInput({ onSubmit, disabled, started }) {
 
         {bundleError && <div className="callout danger" style={{ marginTop: 6 }}>{bundleError}</div>}
         <p className="muted small" style={{ marginTop: 4 }}>
-          Optional. Attach files from any Guidewire Studio area — data dictionary (entityModel.xml, typelists.html), PCFs (.pcf), Gosu rules (.gs), product model (coverage/exclusion/condition/modifier XML), or rating (rate tables/routines). Files are auto-detected and routed to the right gate for grounding.
+          Optional. Attach files from any Guidewire Studio area — data dictionary (entityModel.xml, typelists.html), PCFs (.pcf), Gosu rules (.gs), product model (coverage/exclusion/condition/modifier XML), or rating (rate tables/routines) — or BA notes captured from meetings and stakeholder discussions, in any of: plain text/markdown (.txt/.md), Word (.docx), PDF (.pdf), Excel (.xlsx/.xls), or a Teams/Zoom meeting transcript (.vtt/.srt). Files are auto-detected and routed to the right gate for grounding; you can attach structured artifacts, notes, both, or neither.
         </p>
       </div>
 

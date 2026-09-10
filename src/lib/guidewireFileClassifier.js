@@ -24,6 +24,7 @@ export const ARTIFACT_KINDS = {
   GOSU_RULE: 'gosuRule',
   PRODUCT_MODEL: 'productModel',
   RATING: 'rating',
+  NOTES: 'notes',
   UNKNOWN: 'unknown'
 };
 
@@ -32,6 +33,16 @@ export async function classifyFile(file) {
   const ext = (name.split('.').pop() || '');
 
   // ---------- Filename hints (cheap, usually correct) ----------
+  if (/note|notes|meeting|minutes|transcript|interview|discussion/.test(name)) {
+    return ARTIFACT_KINDS.NOTES;
+  }
+  // BA source formats that are UNAMBIGUOUSLY notes/narrative regardless of
+  // filename — Word docs, PDFs, Excel trackers, and Teams/Zoom meeting
+  // transcript/caption exports (.vtt/.srt) are never structured Guidewire
+  // Studio config exports, so these extensions route straight to NOTES
+  // without needing content sniffing (content sniffing below still applies
+  // to more ambiguous extensions like .xml/.txt/.md).
+  if (/^(docx|pdf|xlsx|xls|vtt|srt)$/.test(ext)) return ARTIFACT_KINDS.NOTES;
   if (/\.pcf$/.test(name)) return ARTIFACT_KINDS.PCF;
   if (/entitymodel|typelist|datadictionary|columns\.html|entitytabledescriptions|typelisttabledescriptions/.test(name)) {
     return ARTIFACT_KINDS.DATA_DICTIONARY;
@@ -101,6 +112,17 @@ export async function classifyFile(file) {
     return ARTIFACT_KINDS.DATA_DICTIONARY;
   }
 
+  // Anything left that is plain narrative text (.txt/.md/.markdown with no
+  // structural markers detected above) is treated as BA/meeting notes
+  // rather than discarded as unknown — free-form notes are a legitimate,
+  // valuable source of context (see notesParser.js) even though they carry
+  // no verified technical identifiers. Binary/unrecognized formats that
+  // failed to even decode as text (empty `sample`) are NOT notes — those
+  // remain UNKNOWN.
+  if (/^(txt|md|markdown)$/.test(ext) && sample.trim().length > 0) {
+    return ARTIFACT_KINDS.NOTES;
+  }
+
   return ARTIFACT_KINDS.UNKNOWN;
 }
 
@@ -121,6 +143,7 @@ export function groupByKind(classifiedFiles) {
     [ARTIFACT_KINDS.GOSU_RULE]: [],
     [ARTIFACT_KINDS.PRODUCT_MODEL]: [],
     [ARTIFACT_KINDS.RATING]: [],
+    [ARTIFACT_KINDS.NOTES]: [],
     [ARTIFACT_KINDS.UNKNOWN]: []
   };
   for (const { file, kind } of classifiedFiles) {
@@ -135,5 +158,6 @@ export const ARTIFACT_KIND_LABELS = {
   [ARTIFACT_KINDS.GOSU_RULE]: 'Gosu Rule',
   [ARTIFACT_KINDS.PRODUCT_MODEL]: 'Product Model',
   [ARTIFACT_KINDS.RATING]: 'Rating',
+  [ARTIFACT_KINDS.NOTES]: 'BA Notes',
   [ARTIFACT_KINDS.UNKNOWN]: 'Unrecognized'
 };

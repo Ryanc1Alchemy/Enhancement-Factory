@@ -10,6 +10,7 @@ import { parsePCFFiles, buildPCFSummaryForRequest } from './pcfParser.js';
 import { parseGosuRuleFiles, buildGosuRuleSummaryForRequest } from './gosuRuleParser.js';
 import { parseProductModelFiles, buildProductModelSummaryForRequest } from './productModelParser.js';
 import { parseRatingFiles, buildRatingSummaryForRequest } from './ratingParser.js';
+import { parseNotesFiles, buildNotesSummaryForRequest } from './notesParser.js';
 
 // Parses a raw list of File objects (of any mix of Guidewire Studio areas)
 // into a single bundle keyed by artifact kind. This is the main entry point
@@ -25,6 +26,7 @@ export async function parseGuidewireBundle(files) {
     gosuRules: null,
     productModel: null,
     rating: null,
+    notes: null,
     unknownFiles: groups[ARTIFACT_KINDS.UNKNOWN].map(f => f.name)
   };
 
@@ -46,6 +48,9 @@ export async function parseGuidewireBundle(files) {
   }
   if (groups[ARTIFACT_KINDS.RATING].length > 0) {
     bundle.rating = await parseRatingFiles(groups[ARTIFACT_KINDS.RATING]);
+  }
+  if (groups[ARTIFACT_KINDS.NOTES].length > 0) {
+    bundle.notes = await parseNotesFiles(groups[ARTIFACT_KINDS.NOTES]);
   }
 
   return bundle;
@@ -80,6 +85,10 @@ export function buildBundleSummaryForRequest(bundle, requestText) {
     const s = buildRatingSummaryForRequest(bundle.rating, requestText);
     if (s) sections.push(`## RATING (rate tables/routines/factors)\n${s}`);
   }
+  if (bundle.notes) {
+    const s = buildNotesSummaryForRequest(bundle.notes, requestText);
+    if (s) sections.push(`## BA / MEETING NOTES (context from stakeholder discussions — unstructured, not a verified technical source)\n${s}`);
+  }
 
   if (bundle.unknownFiles.length > 0) {
     sections.push(`## UNRECOGNIZED FILES\nThe following attached files could not be classified into a known Guidewire Studio area: ${bundle.unknownFiles.join(', ')}. Their content was not used for grounding.`);
@@ -99,6 +108,7 @@ export function describeBundle(bundle) {
   if (bundle.gosuRules) lines.push(`${ARTIFACT_KIND_LABELS[ARTIFACT_KINDS.GOSU_RULE]}: ${bundle.gosuRules.length} rule(s)`);
   if (bundle.productModel) lines.push(`${ARTIFACT_KIND_LABELS[ARTIFACT_KINDS.PRODUCT_MODEL]}: ${bundle.productModel.patterns.length} pattern(s)`);
   if (bundle.rating) lines.push(`${ARTIFACT_KIND_LABELS[ARTIFACT_KINDS.RATING]}: ${bundle.rating.length} item(s)`);
+  if (bundle.notes) lines.push(`${ARTIFACT_KIND_LABELS[ARTIFACT_KINDS.NOTES]}: ${bundle.notes.fileNames.length} file(s), ${bundle.notes.blocks.length} note(s)`);
   if (bundle.unknownFiles.length > 0) lines.push(`Unrecognized: ${bundle.unknownFiles.length} file(s)`);
   return lines;
 }

@@ -30,7 +30,28 @@ async function ensureSchema(sql) {
   `;
 }
 
+// Optional shared-secret auth. If RUNS_API_SECRET is set, all requests to this
+// endpoint must include a matching `x-runs-secret` header — this closes off
+// unauthenticated public access to saved run data (which may contain client
+// enhancement requests and any attached BA notes/data dictionary content).
+// If RUNS_API_SECRET is not set, the endpoint remains open (so local dev and
+// demo setups without this configured keep working exactly as before) — a
+// warning is logged so this doesn't go unnoticed in a real deployment.
+function isAuthorized(req) {
+  const secret = process.env.RUNS_API_SECRET;
+  if (!secret) {
+    // eslint-disable-next-line no-console
+    console.warn('[runs] RUNS_API_SECRET is not set — /api/runs is unauthenticated. Set RUNS_API_SECRET to restrict access.');
+    return true;
+  }
+  return req.headers['x-runs-secret'] === secret;
+}
+
 export default async function handler(req, res) {
+  if (!isAuthorized(req)) {
+    return errorResponse(res, 401, 'Unauthorized');
+  }
+
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const action = url.searchParams.get('action');
 

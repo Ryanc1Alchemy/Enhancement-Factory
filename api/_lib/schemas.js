@@ -2,6 +2,8 @@
 // Gate 6 has TWO tools: produce_jira_payload (draft) and raise_jira_ticket (commit).
 // The commit tool is only exposed after explicit user approval.
 
+import { SKILL_IDS } from './skillsMatrix.js';
+
 export const TOOLS = {
   // ---------- Gate 1 ----------
   produce_request_analysis: {
@@ -178,6 +180,16 @@ export const TOOLS = {
             description: { type: 'string', description: 'If has_rating_impact is true, describe. Else empty string.' }
           },
           required: ['has_rating_impact', 'description']
+        },
+        required_skills: {
+          type: 'array',
+          items: { type: 'string', enum: SKILL_IDS },
+          description:
+            'Every skill from the org\'s controlled skills matrix that is genuinely required to deliver this design. ' +
+            'You will be given the full skill list with a "what this means" rubric in the gate 3 instruction — tag only ' +
+            'skills the design note actually calls for, not every skill that could conceivably be relevant. This becomes ' +
+            'structured, comparable data across enhancements (and flows into Jira labels at gate 6), so precision matters ' +
+            'more than breadth. Empty array if none of the matrix skills genuinely apply.'
         }
       },
       required: [
@@ -187,7 +199,8 @@ export const TOOLS = {
         'pcf_changes',
         'gosu_rule_changes',
         'integration_changes',
-        'rating_impact'
+        'rating_impact',
+        'required_skills'
       ]
     }
   },
@@ -308,7 +321,9 @@ export const TOOLS = {
         labels: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Jira labels. Always include "enhancement-factory" and "ai-generated".'
+          description:
+            'Jira labels. Always include "enhancement-factory" and "ai-generated". Also include every skill ID from ' +
+            'gate 3\'s required_skills (if any were tagged) so the ticket is filterable/searchable by the skills it needs.'
         },
         issue_type: {
           type: 'string',

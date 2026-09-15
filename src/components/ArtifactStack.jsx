@@ -21,19 +21,21 @@ export default function ArtifactStack({ state, actions }) {
 
         {started && (
           <div className="cards">
-            {GATES.map(g => (
+            {GATES.map((g, idx) => (
               <ArtifactCard
-                key={g.num}
-                gate={g.num}
+                key={g.id}
+                gate={g.id}
+                gateNumber={idx + 1}
                 name={g.name}
                 subtitle={g.subtitle}
-                state={state.gateStates[g.num]}
-                artifact={state.artifacts[g.num]}
-                jiraResult={g.num === 6 ? state.jiraResult : null}
+                state={state.gateStates[g.id]}
+                artifact={state.artifacts[g.id]}
+                jiraResult={g.id === 'jira_ticket' ? state.jiraResult : null}
                 busy={state.busy}
                 onAccept={actions.acceptGate}
                 onReject={actions.rejectGate}
                 onEdit={actions.editAndAcceptGate}
+                onRecomputeEstimate={g.id === 'effort_estimate' ? actions.recomputeEstimate : undefined}
               />
             ))}
 

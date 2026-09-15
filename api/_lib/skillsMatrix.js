@@ -62,28 +62,9 @@ export const SKILLS_MATRIX = [
   { id: 'cross_system_change', name: 'Worked across multiple systems or domains', whatThisMeans: 'Experience signal: Worked across multiple systems or domains.', category: 'Technical / Domain Capability' }
 ];
 
-// Skills whose Target Score is N/A through Silver2 in the workbook and only
-// actually targeted starting at Gold -- i.e. a genuine "needs a senior" signal
-// if a Gate 3 design tags any of these. See api/agent.js for the Gold
-// escalation flag this feeds.
-export const GOLD_ONLY_SKILLS = [
-  'detailed_design_specification',
-  'solution_option_analysis',
-  'cross_system_change',
-  'nfr_definition',
-  'defect_root_cause_investigation',
-  'medium_complexity_delivery',
-  'maintainability_focus',
-  'mentoring'
-];
-
 export const SKILL_IDS = SKILLS_MATRIX.map(s => s.id);
 
 // Rubric text for the Gate 3 prompt: a compact "id -- name: what this means" list.
 export function buildSkillsRubricText() {
   return SKILLS_MATRIX.map(s => `- ${s.id} (${s.name}): ${s.whatThisMeans}`).join('\n');
-}
-
-export function isGoldOnlySkill(skillId) {
-  return GOLD_ONLY_SKILLS.includes(skillId);
 }

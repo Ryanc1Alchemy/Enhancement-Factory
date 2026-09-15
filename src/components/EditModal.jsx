@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { GATES } from '../lib/gates.js';
 
 // V1: edit as JSON. Power users will appreciate this. V2 can have field-by-field editors.
 export default function EditModal({ gate, artifact, onConfirm, onCancel }) {
   const [text, setText] = useState(JSON.stringify(artifact, null, 2));
   const [parseError, setParseError] = useState(null);
+  const gateMeta = GATES.find(g => g.id === gate);
 
   const handleSave = () => {
     try {
@@ -19,7 +21,7 @@ export default function EditModal({ gate, artifact, onConfirm, onCancel }) {
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onCancel(); }}>
       <div className="modal" style={{ width: 'min(720px, 100%)' }}>
         <div className="modal-head">
-          <h3>Edit gate {gate} artifact</h3>
+          <h3>Edit artifact: {gateMeta?.name || gate}</h3>
           <p>Edit the JSON directly. Saving accepts this gate with your edited content.</p>
         </div>
         <div className="modal-body">

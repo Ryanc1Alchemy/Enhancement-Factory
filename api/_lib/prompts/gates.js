@@ -1,11 +1,14 @@
 // Per-gate user-message preambles. The orchestrator constructs the user message
 // for each gate by combining (a) the gate-specific instruction, (b) prior artifacts
 // for context, and (c) any user feedback if regenerating.
+//
+// Keyed by stable gate ID (see api/_lib/gateOrder.js), not number. The
+// acceptance_criteria gate now runs BEFORE effort_estimate.
 
 import { buildSkillsRubricText } from '../skillsMatrix.js';
 
 export const GATE_INSTRUCTIONS = {
-  1: `GATE 1 — Request Analysis.
+  request_analysis: `GATE — Request Analysis.
 
 The client has provided this enhancement request:
 
@@ -23,15 +26,15 @@ IMPORTANT — rating impact can never be confirmed from file-based artifacts. Ve
 
 Use the produce_request_analysis tool.`,
 
-  2: `GATE 2 — Scope Definition.
+  scope_definition: `GATE — Scope Definition.
 
-You have approved the request analysis at gate 1. Now define the scope boundary.
+You have approved the request analysis. Now define the scope boundary.
 
 Be deliberate about what you put in "out_of_scope" — this protects the estimate later. List dependencies and integration touchpoints concretely. Surface specific risk flags. Use the produce_scope_definition tool.`,
 
-  3: `GATE 3 — Design Note.
+  design_note: `GATE — Design Note.
 
-You have approved scope at gate 2. Now produce the design note in NTT DATA house style.
+You have approved the scope definition. Now produce the design note in NTT DATA house style.
 
 Name SPECIFIC Guidewire entities, typelist patterns, PCFs (by file pattern e.g., PolicyInfoDV.pcf), Gosu rule categories, and integrations. Avoid generic statements. If the change has rating impact, flag it explicitly — rating changes are higher-risk.
 
@@ -45,31 +48,33 @@ SKILL TAGGING — the org maintains a controlled skills matrix used to staff and
 
 Use the produce_design_note tool.`,
 
-  4: `GATE 4 — Effort Estimate.
+  acceptance_criteria: `GATE — Acceptance Criteria.
 
-You have approved the design at gate 3. Now provide complexity inputs for the estimator.
+You have approved the design note. Now produce Gherkin acceptance criteria — BEFORE the effort estimate is produced, since acceptance criteria define scope, edge cases, and negative paths that should drive how the work is sized, not the other way around.
 
-Count the changes from the design note honestly. Rate the overall complexity (simple/medium/complex) — this is a multiplier so don't inflate it. Justify your inputs in 2-4 sentences. The backend will compute the hours by role and location using the AMS Engagement Estimator model. Use the produce_effort_estimate tool.`,
+Include at least one happy path scenario, two edge cases, and any negative scenarios that matter. Keep each scenario focused on one behaviour. Add NFR considerations where relevant (audit trail, performance, data retention, security). Be concrete and specific to this enhancement — do not restate the design note in Gherkin form; think through what could realistically go wrong or vary (missing data, invalid input, concurrent edits, boundary values, permission/role differences, downstream integration failures) and write scenarios that actually exercise those paths. The effort estimate that follows will be sized based on what you produce here, so genuinely surface the edge cases rather than a minimal token set. Use the produce_acceptance_criteria tool.`,
 
-  5: `GATE 5 — Acceptance Criteria.
+  effort_estimate: `GATE — Effort Estimate.
 
-You have approved the estimate at gate 4. Now produce Gherkin acceptance criteria.
+You have approved the design note AND the acceptance criteria. Now provide complexity inputs for the estimator, and you MUST take the acceptance criteria into account, not just the design note.
 
-Include at least one happy path scenario, two edge cases, and any negative scenarios that matter. Keep each scenario focused on one behaviour. Add NFR considerations where relevant (audit trail, performance, data retention, security). Use the produce_acceptance_criteria tool.`,
+Acceptance criteria define scope, edge cases, and negative paths that were not necessarily visible from the design note alone. Before setting your complexity inputs, review every acceptance criteria scenario and ask: does this scenario imply additional implementation work (extra validation branches, error handling, conditional logic) or additional test work (more test cases, more setup/teardown, edge-case data) beyond what the design note alone suggested? If yes, your counts and/or overall_complexity rating MUST reflect that — do not silently ignore acceptance criteria that clearly implies more work than a bare reading of the design note would suggest. Conversely, if the acceptance criteria is minimal and closely mirrors the happy path already described in the design note, do not artificially inflate the estimate — only increase where the acceptance criteria genuinely adds scope.
 
-  6: `GATE 6 — Jira Ticket Payload (DRAFT).
+Count the changes from the design note honestly, then adjust in light of the acceptance criteria. Rate the overall complexity (simple/medium/complex) — this is a multiplier so don't inflate it, but do not underrate it either if the acceptance criteria revealed non-trivial edge/negative paths. Justify your inputs in 2-4 sentences that explicitly reference which acceptance criteria scenarios (if any) influenced your counts or complexity rating. The backend will compute the hours by role and location using the AMS Engagement Estimator model. Use the produce_effort_estimate tool.`,
 
-You have approved acceptance criteria at gate 5. Assemble the Jira ticket payload from the previous five gates.
+  jira_ticket: `GATE — Jira Ticket Payload (DRAFT).
 
-The description should pull together scope (gate 2) and design summary (gate 3) into a coherent narrative — not a regurgitation. Map the gate 4 hours to Fibonacci story points using the standard table. Choose components from the LoB and entity changes. This is a DRAFT — the user will review before any real ticket is created. Use the produce_jira_payload tool.`,
+You have approved the effort estimate. Assemble the Jira ticket payload from all prior gates.
 
-  6.5: `GATE 6 — Jira Ticket COMMIT.
+The description should pull together the scope definition and design note into a coherent narrative — not a regurgitation. Map the effort estimate hours to Fibonacci story points using the standard table. Choose components from the LoB and entity changes. This is a DRAFT — the user will review before any real ticket is created. Use the produce_jira_payload tool.`,
+
+  jira_ticket_commit: `GATE — Jira Ticket COMMIT.
 
 The user has explicitly approved the draft payload. Now call raise_jira_ticket with confirmed_by_user=true to create the real Jira ticket.`
 };
 
-export function buildGateInstruction(gate, request) {
-  const tpl = GATE_INSTRUCTIONS[gate];
+export function buildGateInstruction(gateId, request) {
+  const tpl = GATE_INSTRUCTIONS[gateId];
   if (!tpl) return '';
   let instruction = tpl.replace('{REQUEST}', request || '');
   if (instruction.includes('{SKILLS_RUBRIC}')) {
@@ -78,8 +83,8 @@ export function buildGateInstruction(gate, request) {
   return instruction;
 }
 
-export function buildRegenerationInstruction(gate, feedback, previousArtifact) {
-  return `GATE ${gate} regeneration.
+export function buildRegenerationInstruction(gateId, feedback, previousArtifact) {
+  return `GATE regeneration (${gateId}).
 
 The user has provided feedback on the previous artifact you produced for this gate. Their feedback is authoritative.
 

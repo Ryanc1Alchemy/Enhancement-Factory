@@ -1,15 +1,22 @@
 // Tool schemas for the six-gate agent. Each gate has exactly one tool.
-// Gate 6 has TWO tools: produce_jira_payload (draft) and raise_jira_ticket (commit).
-// The commit tool is only exposed after explicit user approval.
+// The Jira Ticket gate has TWO tools: produce_jira_payload (draft) and
+// raise_jira_ticket (commit). The commit tool is only exposed after explicit
+// user approval.
+//
+// Tools are grouped under comments by GATE ID, not gate number -- gate
+// numbers are derived from api/_lib/gateOrder.js's GATE_ORDER position, so
+// they are not hardcoded here. See GATE_TOOLS below for the id -> tool(s)
+// mapping that the orchestrator actually uses.
 
 import { SKILL_IDS } from './skillsMatrix.js';
+import { GATE_ORDER, GATE_ID_NAMES, gateNumber } from './gateOrder.js';
 
 export const TOOLS = {
-  // ---------- Gate 1 ----------
+  // ---------- request_analysis ----------
   produce_request_analysis: {
     name: 'produce_request_analysis',
     description:
-      'Produce the gate 1 artifact: a structured analysis of a vague enhancement request. ' +
+      'Produce the request analysis artifact: a structured analysis of a vague enhancement request. ' +
       'Classify the line of business, identify affected Guidewire entities, state your interpretation, ' +
       'list assumptions explicitly, surface ambiguities the human should resolve, and rate your confidence.',
     input_schema: {
@@ -57,11 +64,11 @@ export const TOOLS = {
     }
   },
 
-  // ---------- Gate 2 ----------
+  // ---------- scope_definition ----------
   produce_scope_definition: {
     name: 'produce_scope_definition',
     description:
-      'Produce the gate 2 artifact: a hard scope boundary. What is in, what is explicitly out, what depends on what, and which integration touchpoints are involved.',
+      'Produce the scope definition artifact: a hard scope boundary. What is in, what is explicitly out, what depends on what, and which integration touchpoints are involved.',
     input_schema: {
       type: 'object',
       properties: {
@@ -97,11 +104,11 @@ export const TOOLS = {
     }
   },
 
-  // ---------- Gate 3 ----------
+  // ---------- design_note ----------
   produce_design_note: {
     name: 'produce_design_note',
     description:
-      'Produce the gate 3 artifact: the architectural approach. Specific Guidewire entities, typelists, PCFs, Gosu rules, and integration changes. Written in NTT DATA house style — specific, not generic.',
+      'Produce the design note artifact: the architectural approach. Specific Guidewire entities, typelists, PCFs, Gosu rules, and integration changes. Written in NTT DATA house style -- specific, not generic.',
     input_schema: {
       type: 'object',
       properties: {
@@ -186,9 +193,9 @@ export const TOOLS = {
           items: { type: 'string', enum: SKILL_IDS },
           description:
             'Every skill from the org\'s controlled skills matrix that is genuinely required to deliver this design. ' +
-            'You will be given the full skill list with a "what this means" rubric in the gate 3 instruction — tag only ' +
+            'You will be given the full skill list with a "what this means" rubric in the design note instruction -- tag only ' +
             'skills the design note actually calls for, not every skill that could conceivably be relevant. This becomes ' +
-            'structured, comparable data across enhancements (and flows into Jira labels at gate 6), so precision matters ' +
+            'structured, comparable data across enhancements (and flows into Jira labels), so precision matters ' +
             'more than breadth. Empty array if none of the matrix skills genuinely apply.'
         }
       },
@@ -205,57 +212,16 @@ export const TOOLS = {
     }
   },
 
-  // ---------- Gate 4 ----------
-  // The agent calls this tool. The backend then invokes /api/estimate.js with these
-  // inputs and decorates the response with the computed hours before persisting.
-  produce_effort_estimate: {
-    name: 'produce_effort_estimate',
-    description:
-      'Produce the gate 4 artifact: the effort estimate. You provide the complexity inputs derived from the design note. ' +
-      'The backend will compute the hours by role and location using the AMS Engagement Estimator model, then return the full estimate. ' +
-      'You also provide a narrative justification.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        complexity_inputs: {
-          type: 'object',
-          properties: {
-            entity_changes_count: { type: 'integer', minimum: 0 },
-            typelist_changes_count: { type: 'integer', minimum: 0 },
-            pcf_changes_count: { type: 'integer', minimum: 0 },
-            gosu_rule_changes_count: { type: 'integer', minimum: 0 },
-            integration_changes_count: { type: 'integer', minimum: 0 },
-            has_rating_impact: { type: 'boolean' },
-            overall_complexity: {
-              type: 'string',
-              enum: ['simple', 'medium', 'complex'],
-              description: 'Your subjective complexity rating, used as a multiplier.'
-            }
-          },
-          required: [
-            'entity_changes_count',
-            'typelist_changes_count',
-            'pcf_changes_count',
-            'gosu_rule_changes_count',
-            'integration_changes_count',
-            'has_rating_impact',
-            'overall_complexity'
-          ]
-        },
-        narrative: {
-          type: 'string',
-          description: 'Justification for the complexity inputs. 2-4 sentences referencing the design note.'
-        }
-      },
-      required: ['complexity_inputs', 'narrative']
-    }
-  },
-
-  // ---------- Gate 5 ----------
+  // ---------- acceptance_criteria ----------
+  // This gate now runs BEFORE effort_estimate (see api/_lib/gateOrder.js) --
+  // acceptance criteria define scope, edge cases, and negative paths that
+  // should drive effort sizing, and AC do not themselves need the estimate
+  // as an input, so producing them first is the more logical dependency
+  // direction.
   produce_acceptance_criteria: {
     name: 'produce_acceptance_criteria',
     description:
-      'Produce the gate 5 artifact: Gherkin acceptance criteria. Include the happy path and at least two edge cases. ' +
+      'Produce the acceptance criteria artifact: Gherkin acceptance criteria. Include the happy path and at least two edge cases. ' +
       'Also list non-functional considerations (performance, audit, security) where relevant.',
     input_schema: {
       type: 'object',
@@ -285,11 +251,68 @@ export const TOOLS = {
     }
   },
 
-  // ---------- Gate 6 (draft) ----------
+  // ---------- effort_estimate ----------
+  // The agent calls this tool. The backend then invokes /api/estimate.js with
+  // these inputs and decorates the response with the computed hours before
+  // persisting. This gate now runs AFTER acceptance_criteria -- the agent is
+  // instructed (see api/_lib/prompts/gates.js) to size the work accounting
+  // for every acceptance scenario, not just the design note.
+  produce_effort_estimate: {
+    name: 'produce_effort_estimate',
+    description:
+      'Produce the effort estimate artifact. You provide the complexity inputs derived from BOTH the design note AND the ' +
+      'acceptance criteria already approved for this enhancement -- acceptance criteria define scope, edge cases, and negative ' +
+      'paths that should increase effort where they imply additional implementation or test work beyond what the design note ' +
+      'alone suggested. The backend will compute the hours by role and location using the AMS Engagement Estimator model, ' +
+      'then return the full estimate. You also provide a narrative justification that explicitly references how the ' +
+      'acceptance criteria influenced your inputs.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        complexity_inputs: {
+          type: 'object',
+          properties: {
+            entity_changes_count: { type: 'integer', minimum: 0 },
+            typelist_changes_count: { type: 'integer', minimum: 0 },
+            pcf_changes_count: { type: 'integer', minimum: 0 },
+            gosu_rule_changes_count: { type: 'integer', minimum: 0 },
+            integration_changes_count: { type: 'integer', minimum: 0 },
+            has_rating_impact: { type: 'boolean' },
+            overall_complexity: {
+              type: 'string',
+              enum: ['simple', 'medium', 'complex'],
+              description:
+                'Your subjective complexity rating, used as a multiplier. Must reflect the acceptance criteria as well as ' +
+                'the design note -- e.g. multiple edge-case/negative scenarios implying non-trivial validation or ' +
+                'error-handling logic should push this toward "medium" or "complex" even if the design note alone looked simple.'
+            }
+          },
+          required: [
+            'entity_changes_count',
+            'typelist_changes_count',
+            'pcf_changes_count',
+            'gosu_rule_changes_count',
+            'integration_changes_count',
+            'has_rating_impact',
+            'overall_complexity'
+          ]
+        },
+        narrative: {
+          type: 'string',
+          description:
+            'Justification for the complexity inputs. 2-4 sentences referencing BOTH the design note and the specific ' +
+            'acceptance criteria scenarios that influenced your counts/complexity rating.'
+        }
+      },
+      required: ['complexity_inputs', 'narrative']
+    }
+  },
+
+  // ---------- jira_ticket (draft) ----------
   produce_jira_payload: {
     name: 'produce_jira_payload',
     description:
-      'Produce the gate 6 draft artifact: the Jira ticket payload assembled from gates 1-5. This does NOT create the ticket — it only drafts the payload. The user will review and approve before the ticket is actually created.',
+      'Produce the Jira ticket draft artifact: the Jira ticket payload assembled from all prior gates. This does NOT create the ticket -- it only drafts the payload. The user will review and approve before the ticket is actually created.',
     input_schema: {
       type: 'object',
       properties: {
@@ -300,30 +323,30 @@ export const TOOLS = {
         description: {
           type: 'string',
           description:
-            'Full description in Jira-friendly markdown/wiki format. Should include: brief context, scope (in/out), design summary, dependencies. Pull from gates 2 and 3.'
+            'Full description in Jira-friendly markdown/wiki format. Should include: brief context, scope (in/out), design summary, dependencies. Pull from the scope definition and design note gates.'
         },
         acceptance_criteria_text: {
           type: 'string',
-          description: 'Gherkin acceptance criteria from gate 5, formatted as a single Jira-friendly text block.'
+          description: 'Gherkin acceptance criteria already approved for this enhancement, formatted as a single Jira-friendly text block.'
         },
         story_points: {
           type: 'integer',
           enum: [1, 2, 3, 5, 8, 13, 21],
           description:
-            'Fibonacci story points, derived from gate 4 hours. Use mapping: 1-6h=1, 7-12h=2, 13-24h=3, 25-48h=5, 49-96h=8, 97-192h=13, 193+=21.'
+            'Fibonacci story points, derived from the effort estimate hours. Use mapping: 1-6h=1, 7-12h=2, 13-24h=3, 25-48h=5, 49-96h=8, 97-192h=13, 193+=21.'
         },
         components: {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Jira components (e.g., ["PolicyCenter", "Personal Auto", "Rating"]). Derived from gate 1 LoB and gate 3 entity changes.'
+            'Jira components (e.g., ["PolicyCenter", "Personal Auto", "Rating"]). Derived from the request analysis LoB and design note entity changes.'
         },
         labels: {
           type: 'array',
           items: { type: 'string' },
           description:
             'Jira labels. Always include "enhancement-factory" and "ai-generated". Also include every skill ID from ' +
-            'gate 3\'s required_skills (if any were tagged) so the ticket is filterable/searchable by the skills it needs.'
+            'the design note\'s required_skills (if any were tagged) so the ticket is filterable/searchable by the skills it needs.'
         },
         issue_type: {
           type: 'string',
@@ -343,8 +366,8 @@ export const TOOLS = {
     }
   },
 
-  // ---------- Gate 6 (commit) ----------
-  // Only exposed AFTER the user approves the gate 6 draft payload.
+  // ---------- jira_ticket (commit) ----------
+  // Only exposed AFTER the user approves the draft payload.
   // Backend intercepts this call and routes it to /api/jira.js for the real REST call.
   raise_jira_ticket: {
     name: 'raise_jira_ticket',
@@ -364,28 +387,27 @@ export const TOOLS = {
   }
 };
 
-// Map gate number → tool(s) available in that gate.
-// The orchestrator restricts Claude to only the tools listed for the active gate.
+// Map gate id -> tool(s) available in that gate. The orchestrator restricts
+// Claude to only the tools listed for the active gate. Keyed by stable id
+// (see api/_lib/gateOrder.js) rather than number -- gate numbers are derived
+// from GATE_ORDER position, not hardcoded here.
 export const GATE_TOOLS = {
-  1: ['produce_request_analysis'],
-  2: ['produce_scope_definition'],
-  3: ['produce_design_note'],
-  4: ['produce_effort_estimate'],
-  5: ['produce_acceptance_criteria'],
-  6: ['produce_jira_payload'],
-  6.5: ['raise_jira_ticket'] // commit phase — only after user approves the draft
+  request_analysis: ['produce_request_analysis'],
+  scope_definition: ['produce_scope_definition'],
+  design_note: ['produce_design_note'],
+  acceptance_criteria: ['produce_acceptance_criteria'],
+  effort_estimate: ['produce_effort_estimate'],
+  jira_ticket: ['produce_jira_payload'],
+  jira_ticket_commit: ['raise_jira_ticket'] // commit phase -- only after user approves the draft
 };
 
-export const GATE_NAMES = {
-  1: 'Request Analysis',
-  2: 'Scope Definition',
-  3: 'Design Note',
-  4: 'Effort Estimate',
-  5: 'Acceptance Criteria',
-  6: 'Jira Ticket'
-};
+// Human-readable gate names, keyed by id. Re-exported here (sourced from
+// gateOrder.js) so existing importers of GATE_NAMES from schemas.js keep working.
+export const GATE_NAMES = GATE_ID_NAMES;
 
-export function getToolsForGate(gate) {
-  const toolNames = GATE_TOOLS[gate] || [];
+export function getToolsForGate(gateId) {
+  const toolNames = GATE_TOOLS[gateId] || [];
   return toolNames.map(name => TOOLS[name]);
 }
+
+export { GATE_ORDER, gateNumber };

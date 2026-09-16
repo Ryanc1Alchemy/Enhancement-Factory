@@ -6,6 +6,7 @@ import EditModal from './EditModal.jsx';
 
 export default function ArtifactCard({
   gate,
+  gateNumber,
   name,
   subtitle,
   state,
@@ -14,7 +15,8 @@ export default function ArtifactCard({
   busy,
   onAccept,
   onReject,
-  onEdit
+  onEdit,
+  onRecomputeEstimate
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [showReject, setShowReject] = useState(false);
@@ -32,9 +34,9 @@ export default function ArtifactCard({
       <div className={`card ${state} ${collapsed ? 'collapsed' : ''}`}>
         <div className="card-head" onClick={() => !isPending && setCollapsed(c => !c)}>
           <div className="card-head-left">
-            <div className="card-num">{gate}</div>
+            <div className="card-num">{gateNumber}</div>
             <div>
-              <div className="card-title">Gate {gate} — {name}</div>
+              <div className="card-title">Gate {gateNumber} — {name}</div>
               <div className="muted small">{subtitle}</div>
             </div>
           </div>
@@ -54,7 +56,11 @@ export default function ArtifactCard({
                   <span className="spinner" />Agent is generating this artifact…
                 </div>
               )}
-              {artifact && renderer && renderer(artifact, jiraResult)}
+              {artifact && renderer && renderer(
+                artifact,
+                jiraResult,
+                gate === 'effort_estimate' ? { onRecomputeEstimate: grade => onRecomputeEstimate(gate, grade) } : undefined
+              )}
             </div>
 
             {isProposed && (
@@ -67,11 +73,11 @@ export default function ArtifactCard({
                 </button>
                 <div className="spacer" />
                 <button
-                  className={gate === 6 ? 'btn btn-danger' : 'btn btn-primary'}
+                  className={gate === 'jira_ticket' ? 'btn btn-danger' : 'btn btn-primary'}
                   onClick={() => onAccept(gate)}
                   disabled={busy}
                 >
-                  {gate === 6 ? 'Approve & Raise Jira ticket' : 'Accept'}
+                  {gate === 'jira_ticket' ? 'Approve & Raise Jira ticket' : 'Accept'}
                 </button>
               </div>
             )}

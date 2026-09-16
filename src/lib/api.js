@@ -63,7 +63,7 @@ export const api = {
     commitJira({ request, prior_artifacts }) {
       return postJSON('/api/agent', {
         mode: 'commit_jira',
-        gate: 6,
+        gate: 'jira_ticket',
         request,
         prior_artifacts
       });
@@ -72,7 +72,21 @@ export const api = {
   runs: {
     save(run) { return postJSON('/api/runs?action=save', run, runsAuthHeaders()); },
     get(id) { return getJSON(`/api/runs?action=get&id=${encodeURIComponent(id)}`, runsAuthHeaders()); },
-    list() { return getJSON('/api/runs?action=list', runsAuthHeaders()); }
+    list() { return getJSON('/api/runs?action=list'); }
+  },
+  estimate: {
+    // Direct call to the deterministic estimator endpoint — bypasses /api/agent
+    // entirely. Used when the user changes the assumed delivery grade on the
+    // Gate 4 card: recalculating hours for a different grade is pure
+    // arithmetic on already-known complexity_inputs, so there is no reason to
+    // re-invoke Claude (slower, costs tokens, and introduces non-determinism
+    // for a calculation that has none). See src/hooks/useAgentRun.js
+    // recomputeEstimate().
+    compute({ complexity_inputs, assumed_delivery_grade }) {
+      return postJSON('/api/estimate', {
+        complexity_inputs: { ...complexity_inputs, assumed_delivery_grade }
+      });
+    }
   }
 };
 

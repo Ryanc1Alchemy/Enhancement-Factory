@@ -3,9 +3,9 @@ import { parseBody, jsonResponse, errorResponse } from './_lib/parseBody.js';
 import { SYSTEM_PROMPT } from './_lib/prompts/system.js';
 import { buildGateInstruction, buildRegenerationInstruction } from './_lib/prompts/gates.js';
 import { getToolsForGate, GATE_NAMES } from './_lib/schemas.js';
+import { GATE_ORDER, gateNumber, isBefore } from './_lib/gateOrder.js';
 import { compute as computeEstimate } from './estimate.js';
 import { createTicket } from './jira.js';
-import { GOLD_ONLY_SKILLS } from './_lib/skillsMatrix.js';
 
 // ============================================================
 // /api/agent.js — master agent orchestrator
@@ -14,12 +14,17 @@ import { GOLD_ONLY_SKILLS } from './_lib/skillsMatrix.js';
 // the current gate). The agent has access only to the tool(s) for the active gate,
 // which enforces single-artifact-per-turn discipline at the schema level.
 //
+// Gates are identified by stable string id (see api/_lib/gateOrder.js), not
+// number. The `gate` field in requests/responses is now a gate ID string
+// (e.g. 'design_note'), and the numeric position for display/persistence is
+// derived via gateNumber(gateId).
+//
 // Request body shape:
 //   {
 //     mode: 'advance' | 'regenerate' | 'commit_jira',
-//     gate: 1..6,
+//     gate: '<gate id>',
 //     request: "<one-line client request>",
-//     prior_artifacts: { 1: {...}, 2: {...}, ... },   // accepted artifacts so far
+//     prior_artifacts: { '<gate id>': {...}, ... },   // accepted artifacts so far
 //     feedback?: "<user feedback when regenerating>",
 //     previous_artifact?: {...}                         // when regenerating
 //   }
@@ -58,7 +63,8 @@ function buildMessages({ request, prior_artifacts, gate, mode, feedback, previou
   // mix of "## DATA DICTIONARY", "## PCF SCREENS", "## GOSU RULES",
   // "## PRODUCT MODEL", and "## RATING" sections depending on what the user
   // attached. This is injected once, early in the conversation, so it's
-  // available context for every gate (grounding matters most at gates 1 and 3).
+  // available context for every gate (grounding matters most at request
+  // analysis and design note).
   if (data_dictionary) {
     messages.push({
       role: 'user',
@@ -80,14 +86,16 @@ function buildMessages({ request, prior_artifacts, gate, mode, feedback, previou
 
   // Replay prior gates as a compact transcript so the agent has context without
   // trying to re-emit prior tool calls (which would confuse the schema).
-  const acceptedGates = Object.keys(prior_artifacts || {})
-    .map(Number)
-    .filter(g => g < gate)
-    .sort((a, b) => a - b);
+  // "Prior" is now determined by position in GATE_ORDER, not by numeric
+  // comparison — this is what makes the gate order a config change rather
+  // than a scattered set of assumptions.
+  const acceptedGateIds = Object.keys(prior_artifacts || {})
+    .filter(g => isBefore(g, gate))
+    .sort((a, b) => GATE_ORDER.indexOf(a) - GATE_ORDER.indexOf(b));
 
-  if (acceptedGates.length > 0) {
-    const summary = acceptedGates.map(g => {
-      return `--- Gate ${g} (${GATE_NAMES[g]}) — APPROVED ---\n${JSON.stringify(prior_artifacts[g], null, 2)}`;
+  if (acceptedGateIds.length > 0) {
+    const summary = acceptedGateIds.map(g => {
+      return `--- Gate ${gateNumber(g)} (${GATE_NAMES[g]}) — APPROVED ---\n${JSON.stringify(prior_artifacts[g], null, 2)}`;
     }).join('\n\n');
 
     messages.push({
@@ -162,16 +170,16 @@ export default async function handler(req, res) {
     return errorResponse(res, 400, 'gate and request are required');
   }
 
-  // ---------- Special: gate 6 commit (raise_jira_ticket) ----------
+  // ---------- Special: jira_ticket commit (raise_jira_ticket) ----------
   if (mode === 'commit_jira') {
-    const draft = prior_artifacts[6];
+    const draft = prior_artifacts['jira_ticket'];
     if (!draft) {
-      return errorResponse(res, 400, 'No gate 6 draft payload to commit');
+      return errorResponse(res, 400, 'No jira_ticket draft payload to commit');
     }
     try {
       const result = await createTicket(draft);
       return jsonResponse(res, 200, {
-        gate: 6,
+        gate: 'jira_ticket',
         gate_name: 'Jira Ticket',
         commit_result: result
       });
@@ -204,55 +212,35 @@ export default async function handler(req, res) {
 
   let artifact = toolBlock.input;
 
-  // ---------- Gate 3: flag entities introduced that weren't flagged at gate 1 ----------
+  // ---------- design_note: flag entities introduced that weren't flagged at request_analysis ----------
   // Free consistency check — no new inputs, no risk of false positives beyond a
-  // simple name comparison. Gate 1's affected_entities is the human-reviewed
-  // baseline; if gate 3's design introduces something not in that list, that's
-  // worth a human's attention even though it may well be legitimate (gate 1
-  // isn't always exhaustive). This never blocks — it only surfaces a warning
-  // on the artifact for the UI to render.
-  if (gate === 3 && artifact && Array.isArray(artifact.entity_changes)) {
-    const gate1Entities = new Set(
-      (prior_artifacts?.[1]?.affected_entities || []).map(e => String(e).toLowerCase().trim())
+  // simple name comparison. request_analysis's affected_entities is the
+  // human-reviewed baseline; if the design note introduces something not in
+  // that list, that's worth a human's attention even though it may well be
+  // legitimate (request_analysis isn't always exhaustive). This never blocks
+  // — it only surfaces a warning on the artifact for the UI to render.
+  if (gate === 'design_note' && artifact && Array.isArray(artifact.entity_changes)) {
+    const priorEntities = new Set(
+      (prior_artifacts?.['request_analysis']?.affected_entities || []).map(e => String(e).toLowerCase().trim())
     );
     const driftedEntities = artifact.entity_changes
       .map(ec => ec.entity)
       .filter(Boolean)
-      .filter(entity => !gate1Entities.has(String(entity).toLowerCase().trim()));
+      .filter(entity => !priorEntities.has(String(entity).toLowerCase().trim()));
     // De-duplicate while preserving order.
     const uniqueDrifted = [...new Set(driftedEntities)];
     if (uniqueDrifted.length > 0) {
       artifact = {
         ...artifact,
         entity_drift_warnings: uniqueDrifted.map(
-          entity => `"${entity}" was not listed in gate 1's affected entities — confirm this is intentional.`
+          entity => `"${entity}" was not listed in the request analysis's affected entities — confirm this is intentional.`
         )
       };
     }
   }
 
-  // ---------- Gate 3: Gold escalation flag ----------
-  // A small, fixed set of skills in the org's skills matrix are only realistic
-  // at Gold level (Target Score is N/A through Silver2, only actually targeted
-  // starting at Gold — see api/_lib/skillsMatrix.js). If the design note's
-  // tagged required_skills include any of these, that's a genuine "this needs
-  // a senior on it" signal the app previously had no mechanism to surface.
-  // This is a pure derived flag — no new inputs, cited against the matrix.
-  if (gate === 3 && artifact && Array.isArray(artifact.required_skills)) {
-    const matchedGoldSkills = artifact.required_skills.filter(skillId => GOLD_ONLY_SKILLS.includes(skillId));
-    if (matchedGoldSkills.length > 0) {
-      artifact = {
-        ...artifact,
-        gold_escalation_flag: true,
-        gold_escalation_reason:
-          `This design requires skill(s) that the org's skills matrix only targets from Gold level onward: ` +
-          `${matchedGoldSkills.join(', ')}. Recommend Gold-level involvement before committing to this estimate.`
-      };
-    }
-  }
-
-  // ---------- Gate 4: enrich agent's complexity inputs with computed estimate ----------
-  if (gate === 4 && artifact && artifact.complexity_inputs) {
+  // ---------- effort_estimate: enrich agent's complexity inputs with computed estimate ----------
+  if (gate === 'effort_estimate' && artifact && artifact.complexity_inputs) {
     try {
       const computed = computeEstimate(artifact.complexity_inputs);
       artifact = {

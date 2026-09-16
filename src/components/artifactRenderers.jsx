@@ -115,15 +115,9 @@ export function renderGate3(a) {
         </div>
       )}
 
-      {a.gold_escalation_flag && (
-        <div className="callout warn">
-          <strong>Gold escalation flagged:</strong> {a.gold_escalation_reason}
-        </div>
-      )}
-
       {(a.entity_drift_warnings || []).length > 0 && (
         <div className="callout warn">
-          <strong>Entity drift vs. gate 1:</strong>
+          <strong>Entity drift vs. Request Analysis:</strong>
           <ul className="artifact-list" style={{ marginTop: 4 }}>
             {a.entity_drift_warnings.map((w, i) => <li key={i}>{w}</li>)}
           </ul>
@@ -197,9 +191,13 @@ function ChangeTable({ label, rows, cols, headers }) {
   );
 }
 
-export function renderGate4(a) {
+const DELIVERY_GRADES = ['Bronze1', 'Bronze2', 'Silver1', 'Silver2', 'Gold1', 'Gold2'];
+
+export function renderGate4(a, _jiraResult, gate4Extras) {
   if (!a) return null;
   const ce = a.computed_estimate;
+  const onRecomputeEstimate = gate4Extras?.onRecomputeEstimate;
+  const currentGrade = ce?.assumed_delivery_grade || 'Silver2';
 
   return (
     <div className="artifact-grid">
@@ -207,6 +205,31 @@ export function renderGate4(a) {
         <span className="artifact-label">Justification</span>
         <div className="artifact-value">{a.narrative}</div>
       </div>
+
+      {onRecomputeEstimate && (
+        <div className="artifact-section">
+          <span className="artifact-label">Assumed delivery grade</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <select
+              className="request-input"
+              style={{ maxWidth: 160, padding: '6px 10px' }}
+              value={currentGrade}
+              onChange={e => onRecomputeEstimate(e.target.value)}
+            >
+              {DELIVERY_GRADES.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+            <span className="muted small">
+              Changes Dev/QA/Architect hours only — recalculated instantly, no agent call.
+            </span>
+          </div>
+          {currentGrade !== 'Silver2' && (
+            <div className="callout warn" style={{ marginTop: 6 }}>
+              This adjustment is seeded from the COCOMO II personnel-capability model, not calibrated
+              against internal delivery data — treat it as a starting shape, not a fact.
+            </div>
+          )}
+        </div>
+      )}
 
       {a.estimator_error ? (
         <div className="callout danger">Estimator error: {a.estimator_error}</div>
@@ -368,10 +391,10 @@ function JiraResultBlock({ result }) {
 }
 
 export const GATE_RENDERERS = {
-  1: renderGate1,
-  2: renderGate2,
-  3: renderGate3,
-  4: renderGate4,
-  5: renderGate5,
-  6: renderGate6
+  request_analysis: renderGate1,
+  scope_definition: renderGate2,
+  design_note: renderGate3,
+  acceptance_criteria: renderGate5,
+  effort_estimate: renderGate4,
+  jira_ticket: renderGate6
 };

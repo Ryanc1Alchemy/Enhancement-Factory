@@ -31,6 +31,32 @@ const COMPLEXITY_MULTIPLIERS = {
   complex: 1.40
 };
 
+// Personnel/developer-grade multipliers — seeded from the COCOMO II
+// Post-Architecture model's analyst-capability cost driver, mapped onto the
+// org's 6-tier Bronze1-Gold2 ladder against COCOMO's 5-tier scale (very low /
+// low / nominal / high / very high). Applied ONLY to Dev/QA/Architect hours —
+// BA effort does not meaningfully change based on the assigned developer's
+// skill level. Silver2 (COCOMO "nominal", multiplier 1.0) is the default, so
+// omitting assumed_delivery_grade entirely preserves today's numbers exactly.
+//
+// IMPORTANT CAVEAT — this is a starting SHAPE, not a calibrated FACT. COCOMO
+// II is not calibrated below ~2,000 lines of code (most enhancements here are
+// well under that), and even in rigorous application the model's own
+// published accuracy is only within ~40% (magnitude of relative error). This
+// table should be replaced with real closed-ticket delivery data as soon as
+// any exists — see methodology string below, which discloses this whenever a
+// non-default grade is selected.
+const PERSONNEL_MULTIPLIERS = {
+  Bronze1: 1.42, // COCOMO "very low"
+  Bronze2: 1.19, // COCOMO "low"
+  Silver1: 1.19, // COCOMO "low"
+  Silver2: 1.00, // COCOMO "nominal" — default
+  Gold1:   0.85, // COCOMO "high"
+  Gold2:   0.71  // COCOMO "very high"
+};
+const DEFAULT_DELIVERY_GRADE = 'Silver2';
+const PERSONNEL_MULTIPLIER_ROLES = ['Dev', 'QA', 'Architect']; // BA excluded
+
 // Confidence bands (wider when complexity is higher or rating is involved)
 function computeConfidenceBand(inputs) {
   if (inputs.has_rating_impact || inputs.overall_complexity === 'complex') return '±50%';
@@ -90,10 +116,34 @@ export function compute(inputs) {
     hours_by_role[role] = Math.round(hours_by_role[role] * mult * 10) / 10;
   }
 
-  // Floor: every enhancement has minimum overhead (kickoff, code review, deployment)
-  const FLOOR = { BA: 2, Dev: 4, QA: 2, Architect: 1 };
+  // Apply personnel/developer-grade multiplier — only to Dev/QA/Architect,
+  // never BA (see PERSONNEL_MULTIPLIERS comment above). Grade is a human
+  // input selected on the Gate 4 card (not something the agent decides);
+  // omitting it entirely defaults to Silver2 (multiplier 1.0), so existing
+  // callers that don't pass this see no change in behaviour.
+  const assumedGrade = inputs.assumed_delivery_grade && PERSONNEL_MULTIPLIERS[inputs.assumed_delivery_grade]
+    ? inputs.assumed_delivery_grade
+    : DEFAULT_DELIVERY_GRADE;
+  const personnelMult = PERSONNEL_MULTIPLIERS[assumedGrade];
+  for (const role of PERSONNEL_MULTIPLIER_ROLES) {
+    hours_by_role[role] = Math.round(hours_by_role[role] * personnelMult * 10) / 10;
+  }
+
+  // Fixed process overhead — kickoff, PR review wait, deploy coordination.
+  // This is ADDED on top of the calculated task hours rather than acting as a
+  // floor that overrides them. Previously this was a hard minimum
+  // (`if (hours < FLOOR) hours = FLOOR`), which meant a trivial single-typelist
+  // change (e.g. ~1.5h Dev pre-adjustment) and a task that genuinely needed
+  // 4 hours both collapsed to the exact same displayed number — the floor was
+  // silently erasing the real signal BASE_HOURS already captured for small
+  // tickets. Making this additive instead keeps task-size signal intact across
+  // the full range of ticket sizes while still accounting for the real,
+  // non-zero overhead every enhancement carries regardless of size.
+  // Added AFTER the complexity multiplier — process overhead doesn't scale
+  // with technical complexity the way coding effort does.
+  const PROCESS_OVERHEAD_HOURS = { BA: 1, Dev: 1.5, QA: 1, Architect: 0.5 };
   for (const role of roles) {
-    if (hours_by_role[role] < FLOOR[role]) hours_by_role[role] = FLOOR[role];
+    hours_by_role[role] = Math.round((hours_by_role[role] + PROCESS_OVERHEAD_HOURS[role]) * 10) / 10;
   }
 
   // Total
@@ -108,6 +158,17 @@ export function compute(inputs) {
     Nearshore:      Math.round(total_hours * LOCATION_SPLIT.Nearshore * 10) / 10
   };
 
+  const methodologyBase =
+    'AMS Engagement Estimator — per-enhancement subset (v1). Base task hours + fixed process overhead ' +
+    '(kickoff/PR review/deploy) added per role; overhead no longer acts as a minimum floor, so small ' +
+    'changes are sized independently from larger ones.';
+  const methodologyGradeNote = assumedGrade === DEFAULT_DELIVERY_GRADE
+    ? ` Assumed delivery grade: ${assumedGrade} (default, multiplier ×1.00).`
+    : ` Assumed delivery grade: ${assumedGrade} (Dev/QA/Architect hours adjusted ×${personnelMult}). ` +
+      'This multiplier is seeded from the COCOMO II personnel-capability cost driver, NOT calibrated ' +
+      'against internal delivery data — treat it as a starting shape, not a fact, until real closed-ticket ' +
+      'data is available to replace it.';
+
   return {
     hours_by_role,
     hours_by_location,
@@ -115,7 +176,8 @@ export function compute(inputs) {
     story_points: hoursToStoryPoints(total_hours),
     confidence_band: computeConfidenceBand(inputs),
     location_split_assumption: '15% Onsite / 70% Offshore India / 15% Nearshore (NTT DATA AMS default)',
-    methodology: 'AMS Engagement Estimator — per-enhancement subset (v1)'
+    assumed_delivery_grade: assumedGrade,
+    methodology: methodologyBase + methodologyGradeNote
   };
 }
 

@@ -1,17 +1,32 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { api, newRunId } from '../lib/api.js';
-import { STATES } from '../lib/gates.js';
+import { STATES, GATE_ORDER, nextGateId, isLastGate, gateNumber } from '../lib/gates.js';
 import { buildBundleSummaryForRequest, describeBundle } from '../lib/guidewireArtifactBundle.js';
 
 // useRef for always-fresh values (per established learning — avoids stale closure bugs in persistence)
 // Async background save to /api/runs that does not block the UI
 
+// Current schema version for stored run records. Bumped from the implicit v1
+// (numeric gate 1-6 keys, where 4=Effort Estimate and 5=Acceptance Criteria)
+// to v2 when gates were re-identified by stable string id and reordered
+// (Acceptance Criteria now precedes Effort Estimate). Runs saved without this
+// field, or with an older value, are pre-reorder runs and must NOT be
+// silently reinterpreted under the new gate meanings — see api/runs.js.
+const SCHEMA_VERSION = 2;
+
+function initialGateStates() {
+  const states = {};
+  for (const id of GATE_ORDER) states[id] = STATES.PENDING;
+  return states;
+}
+
 const initialState = {
   runId: null,
   request: '',
-  // gate state map: { 1: 'pending'|'proposed'|'accepted'|'rejected'|'regenerating', ... }
-  gateStates: { 1: STATES.PENDING, 2: STATES.PENDING, 3: STATES.PENDING, 4: STATES.PENDING, 5: STATES.PENDING, 6: STATES.PENDING },
-  // artifacts produced — keyed by gate number
+  schemaVersion: SCHEMA_VERSION,
+  // gate state map: { '<gate id>': 'pending'|'proposed'|'accepted'|'rejected'|'regenerating', ... }
+  gateStates: initialGateStates(),
+  // artifacts produced — keyed by gate id
   artifacts: {}, // proposed/current artifact per gate
   acceptedArtifacts: {}, // accepted artifacts only — passed to backend as prior_artifacts
   previousArtifacts: {}, // pre-regeneration artifact (for diff view)
@@ -35,7 +50,14 @@ export function useAgentRun() {
       await api.runs.save({
         run_id: s.runId,
         request: s.request,
-        current_gate: highestActiveGate(s),
+        schema_version: SCHEMA_VERSION,
+        // current_gate is stored as the NUMERIC position for backward
+        // compatibility with the existing INT column — but its MEANING is
+        // only valid when read alongside schema_version=2 (see api/runs.js).
+        // A v1 row with current_gate=4 means "Effort Estimate" (old order);
+        // a v2 row with current_gate=4 means "Acceptance Criteria" (new
+        // order). Never conflate the two without checking schema_version.
+        current_gate: gateNumber(highestActiveGateId(s)) || 0,
         status: s.jiraResult?.commit_result?.mode === 'live' ? 'completed' : 'in_progress',
         artifacts: s.acceptedArtifacts,
         history: s.conversation,
@@ -71,9 +93,11 @@ export function useAgentRun() {
     if (!request || !request.trim()) return;
     const trimmed = request.trim();
     const runId = newRunId();
+    const firstGateId = GATE_ORDER[0];
     const bundleLines = guidewireBundle ? describeBundle(guidewireBundle) : [];
     setState({
       ...initialState,
+      gateStates: initialGateStates(),
       runId,
       request: trimmed,
       guidewireBundle: guidewireBundle || null,
@@ -84,21 +108,21 @@ export function useAgentRun() {
           : []),
         { who: 'system', body: 'Agent starting at gate 1 — Request Analysis…', ts: Date.now() }
       ],
-      gateStates: { ...initialState.gateStates, 1: STATES.REGENERATING },
+      gateStates: { ...initialGateStates(), [firstGateId]: STATES.REGENERATING },
       busy: true
     });
 
     try {
       const res = await api.agent.advance({
-        gate: 1,
+        gate: firstGateId,
         request: trimmed,
         prior_artifacts: {},
         data_dictionary: guidewireBundle ? buildBundleSummaryForRequest(guidewireBundle, trimmed) : null
       });
       setState(s => ({
         ...s,
-        artifacts: { ...s.artifacts, 1: res.artifact },
-        gateStates: { ...s.gateStates, 1: STATES.PROPOSED },
+        artifacts: { ...s.artifacts, [firstGateId]: res.artifact },
+        gateStates: { ...s.gateStates, [firstGateId]: STATES.PROPOSED },
         conversation: [...s.conversation, { who: 'agent', body: 'Gate 1 — Request Analysis ready for review.', ts: Date.now() }],
         busy: false
       }));
@@ -108,25 +132,26 @@ export function useAgentRun() {
   }, [setError]);
 
   // ------------ accept a gate ------------
-  const acceptGate = useCallback(async (gate) => {
+  const acceptGate = useCallback(async (gateId) => {
     const s = stateRef.current;
-    const artifact = s.artifacts[gate];
+    const artifact = s.artifacts[gateId];
     if (!artifact) return;
 
-    const newAccepted = { ...s.acceptedArtifacts, [gate]: artifact };
-    const newGateStates = { ...s.gateStates, [gate]: STATES.ACCEPTED };
+    const newAccepted = { ...s.acceptedArtifacts, [gateId]: artifact };
+    const newGateStates = { ...s.gateStates, [gateId]: STATES.ACCEPTED };
 
-    if (gate < 6) {
+    if (!isLastGate(gateId)) {
       // Advance to next gate
-      newGateStates[gate + 1] = STATES.REGENERATING;
+      const nextId = nextGateId(gateId);
+      newGateStates[nextId] = STATES.REGENERATING;
       setState(prev => ({
         ...prev,
         acceptedArtifacts: newAccepted,
         gateStates: newGateStates,
         conversation: [
           ...prev.conversation,
-          { who: 'user', body: `Approved gate ${gate}.`, ts: Date.now() },
-          { who: 'system', body: `Agent advancing to gate ${gate + 1}…`, ts: Date.now() }
+          { who: 'user', body: `Approved gate: ${gateId}.`, ts: Date.now() },
+          { who: 'system', body: `Agent advancing to the next gate…`, ts: Date.now() }
         ],
         busy: true,
         error: null
@@ -134,24 +159,24 @@ export function useAgentRun() {
 
       try {
         const res = await api.agent.advance({
-          gate: gate + 1,
+          gate: nextId,
           request: s.request,
           prior_artifacts: newAccepted,
           data_dictionary: s.guidewireBundle ? buildBundleSummaryForRequest(s.guidewireBundle, s.request) : null
         });
         setState(prev => ({
           ...prev,
-          artifacts: { ...prev.artifacts, [gate + 1]: res.artifact },
-          gateStates: { ...prev.gateStates, [gate + 1]: STATES.PROPOSED },
-          conversation: [...prev.conversation, { who: 'agent', body: `Gate ${gate + 1} — ${res.gate_name} ready for review.`, ts: Date.now() }],
+          artifacts: { ...prev.artifacts, [nextId]: res.artifact },
+          gateStates: { ...prev.gateStates, [nextId]: STATES.PROPOSED },
+          conversation: [...prev.conversation, { who: 'agent', body: `${res.gate_name} ready for review.`, ts: Date.now() }],
           busy: false
         }));
       } catch (err) {
         setError(err);
-        setState(prev => ({ ...prev, gateStates: { ...prev.gateStates, [gate + 1]: STATES.PENDING } }));
+        setState(prev => ({ ...prev, gateStates: { ...prev.gateStates, [nextId]: STATES.PENDING } }));
       }
     } else {
-      // Gate 6 accepted — this means the user approved the DRAFT.
+      // Last gate (jira_ticket) accepted — this means the user approved the DRAFT.
       // Now commit to Jira.
       setState(prev => ({
         ...prev,
@@ -159,7 +184,7 @@ export function useAgentRun() {
         gateStates: newGateStates,
         conversation: [
           ...prev.conversation,
-          { who: 'user', body: 'Approved gate 6 draft. Raising Jira ticket…', ts: Date.now() }
+          { who: 'user', body: 'Approved Jira ticket draft. Raising Jira ticket…', ts: Date.now() }
         ],
         busy: true,
         error: null
@@ -173,7 +198,7 @@ export function useAgentRun() {
         setState(prev => ({
           ...prev,
           jiraResult: res,
-          gateStates: { ...prev.gateStates, 6: STATES.COMMITTED },
+          gateStates: { ...prev.gateStates, [gateId]: STATES.COMMITTED },
           conversation: [
             ...prev.conversation,
             {
@@ -196,18 +221,18 @@ export function useAgentRun() {
   }, [setError]);
 
   // ------------ reject a gate (with feedback) ------------
-  const rejectGate = useCallback(async (gate, feedback) => {
+  const rejectGate = useCallback(async (gateId, feedback) => {
     const s = stateRef.current;
-    const previous = s.artifacts[gate];
+    const previous = s.artifacts[gateId];
 
     setState(prev => ({
       ...prev,
-      previousArtifacts: { ...prev.previousArtifacts, [gate]: previous },
-      gateStates: { ...prev.gateStates, [gate]: STATES.REGENERATING },
+      previousArtifacts: { ...prev.previousArtifacts, [gateId]: previous },
+      gateStates: { ...prev.gateStates, [gateId]: STATES.REGENERATING },
       conversation: [
         ...prev.conversation,
-        { who: 'user', body: `Rejected gate ${gate}. Feedback: ${feedback}`, ts: Date.now() },
-        { who: 'system', body: `Agent regenerating gate ${gate}…`, ts: Date.now() }
+        { who: 'user', body: `Rejected gate: ${gateId}. Feedback: ${feedback}`, ts: Date.now() },
+        { who: 'system', body: `Agent regenerating…`, ts: Date.now() }
       ],
       busy: true,
       error: null
@@ -215,7 +240,7 @@ export function useAgentRun() {
 
     try {
       const res = await api.agent.regenerate({
-        gate,
+        gate: gateId,
         request: s.request,
         prior_artifacts: s.acceptedArtifacts,
         feedback,
@@ -224,34 +249,64 @@ export function useAgentRun() {
       });
       setState(prev => ({
         ...prev,
-        artifacts: { ...prev.artifacts, [gate]: res.artifact },
-        gateStates: { ...prev.gateStates, [gate]: STATES.PROPOSED },
-        conversation: [...prev.conversation, { who: 'agent', body: `Gate ${gate} regenerated.`, ts: Date.now() }],
+        artifacts: { ...prev.artifacts, [gateId]: res.artifact },
+        gateStates: { ...prev.gateStates, [gateId]: STATES.PROPOSED },
+        conversation: [...prev.conversation, { who: 'agent', body: `Gate regenerated.`, ts: Date.now() }],
         busy: false
       }));
     } catch (err) {
       setError(err);
-      setState(prev => ({ ...prev, gateStates: { ...prev.gateStates, [gate]: STATES.PROPOSED } }));
+      setState(prev => ({ ...prev, gateStates: { ...prev.gateStates, [gateId]: STATES.PROPOSED } }));
+    }
+  }, [setError]);
+
+  // ------------ recompute effort_estimate for a different assumed delivery grade ------------
+  // Pure client/estimator-side recalculation — deliberately does NOT call the
+  // agent. The complexity_inputs Claude already proposed don't change when a
+  // different developer grade is selected; only the multiplier applied to
+  // those same numbers changes, which is arithmetic /api/estimate already
+  // does deterministically. Re-invoking Claude for this would be slower,
+  // cost tokens, and risk subtle non-determinism in an otherwise-deterministic
+  // calculation — see src/lib/api.js estimate.compute() comment.
+  const recomputeEstimate = useCallback(async (gateId, assumedGrade) => {
+    const s = stateRef.current;
+    const artifact = s.artifacts[gateId];
+    if (!artifact || !artifact.complexity_inputs) return;
+
+    try {
+      const computed = await api.estimate.compute({
+        complexity_inputs: artifact.complexity_inputs,
+        assumed_delivery_grade: assumedGrade
+      });
+      setState(prev => ({
+        ...prev,
+        artifacts: {
+          ...prev.artifacts,
+          [gateId]: { ...prev.artifacts[gateId], computed_estimate: computed }
+        }
+      }));
+    } catch (err) {
+      setError(err);
     }
   }, [setError]);
 
   // ------------ edit a gate inline ------------
   // Treats user-edited content as authoritative. Marks accepted with the edited version.
-  const editAndAcceptGate = useCallback(async (gate, editedArtifact) => {
+  const editAndAcceptGate = useCallback(async (gateId, editedArtifact) => {
     const s = stateRef.current;
     setState(prev => ({
       ...prev,
-      previousArtifacts: { ...prev.previousArtifacts, [gate]: prev.artifacts[gate] },
-      artifacts: { ...prev.artifacts, [gate]: editedArtifact },
+      previousArtifacts: { ...prev.previousArtifacts, [gateId]: prev.artifacts[gateId] },
+      artifacts: { ...prev.artifacts, [gateId]: editedArtifact },
       conversation: [
         ...prev.conversation,
-        { who: 'user', body: `Edited gate ${gate} inline. Accepting edited version.`, ts: Date.now() }
+        { who: 'user', body: `Edited gate inline. Accepting edited version.`, ts: Date.now() }
       ]
     }));
     // Then accept normally
-    await acceptGate(gate);
+    await acceptGate(gateId);
     // The acceptGate above will pick up the edited artifact because we updated
-    // state.artifacts[gate] before calling.
+    // state.artifacts[gateId] before calling.
   }, [acceptGate]);
 
   // ------------ reset ------------
@@ -266,15 +321,16 @@ export function useAgentRun() {
       acceptGate,
       rejectGate,
       editAndAcceptGate,
+      recomputeEstimate,
       reset
     }
   };
 }
 
-function highestActiveGate(s) {
-  let highest = 0;
-  for (const g of [1, 2, 3, 4, 5, 6]) {
-    if (s.gateStates[g] !== STATES.PENDING) highest = g;
+function highestActiveGateId(s) {
+  let highest = null;
+  for (const id of GATE_ORDER) {
+    if (s.gateStates[id] !== STATES.PENDING) highest = id;
   }
   return highest;
 }

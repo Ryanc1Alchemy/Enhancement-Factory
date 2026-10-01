@@ -40,6 +40,7 @@
   gap: 10px;
 }
 .topbar-title strong {
+  font-family: var(--font-heading);
   font-size: 15px;
   letter-spacing: -0.2px;
   color: var(--text);
@@ -96,6 +97,7 @@
 }
 .pane-header h2 {
   margin: 0;
+  font-family: var(--font-heading);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.4px;
@@ -168,6 +170,7 @@
 }
 .request-entry h3 {
   margin: 0 0 4px;
+  font-family: var(--font-heading);
   font-size: 14px;
   font-weight: 600;
 }
@@ -224,7 +227,7 @@
   color: white;
   border-color: var(--ntt-red);
 }
-.btn-danger:hover:not(:disabled) { background: #b8021f; border-color: #b8021f; }
+.btn-danger:hover:not(:disabled) { background: #8a4c37; border-color: #8a4c37; }
 
 .btn-ghost {
   background: transparent;
@@ -328,6 +331,7 @@
 .card.committed .card-num { background: var(--success); }
 
 .card-title {
+  font-family: var(--font-heading);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.1px;
@@ -457,9 +461,9 @@
   color: var(--ntt-blue-dark);
   border-left: 3px solid var(--ntt-blue);
 }
-.callout.warn { background: var(--warn-soft); color: #6b4500; border-left-color: var(--warn); }
-.callout.danger { background: var(--danger-soft); color: #7a0716; border-left-color: var(--ntt-red); }
-.callout.success { background: var(--success-soft); color: #0c5d2e; border-left-color: var(--success); }
+.callout.warn { background: var(--warn-soft); color: #685111; border-left-color: var(--warn); }
+.callout.danger { background: var(--danger-soft); color: #7a4632; border-left-color: var(--ntt-red); }
+.callout.success { background: var(--success-soft); color: var(--ntt-blue-dark); border-left-color: var(--success); }
 
 /* ============================================================
    Card actions
@@ -503,7 +507,7 @@
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
 }
-.modal-head h3 { margin: 0; font-size: 15px; }
+.modal-head h3 { margin: 0; font-family: var(--font-heading); font-size: 15px; }
 .modal-head p { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); }
 .modal-body {
   padding: 16px 20px;
@@ -568,7 +572,7 @@
   font-family: var(--font-mono);
   font-size: 18px;
   font-weight: 700;
-  color: #0c5d2e;
+  color: var(--ntt-blue-dark);
 }
 .ticket-result a {
   color: var(--ntt-blue);
@@ -581,10 +585,10 @@
   background: var(--warn-soft);
   border-color: var(--warn);
 }
-.ticket-result.simulated .key { color: #6b4500; }
+.ticket-result.simulated .key { color: #685111; }
 
 .ticket-result.error {
   background: var(--danger-soft);
   border-color: var(--ntt-red);
 }
-.ticket-result.error .key { color: #7a0716; }
+.ticket-result.error .key { color: var(--danger); }

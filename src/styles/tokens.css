@@ -1,0 +1,72 @@
+/* ============================================================
+   NTT DATA — Enhancement Factory v2
+   Design tokens
+   ============================================================ */
+
+:root {
+  /* Brand */
+  --ntt-blue:        #003087;
+  --ntt-blue-dark:   #001f5c;
+  --ntt-blue-soft:   #e8edf6;
+  --ntt-red:         #e4002b;
+  --ntt-red-soft:    #fde8eb;
+
+  /* Neutrals */
+  --bg:              #ffffff;
+  --surface:         #fafafa;
+  --surface-2:       #f4f5f7;
+  --border:          #e2e5ea;
+  --border-strong:   #c8ccd2;
+
+  /* Text */
+  --text:            #1a1d24;
+  --text-muted:      #5b6270;
+  --text-soft:       #8a909c;
+
+  /* States */
+  --success:         #1f9d55;
+  --success-soft:    #e6f6ec;
+  --warn:            #c47b00;
+  --warn-soft:       #fbeed0;
+  --danger:          #d12a3a;
+  --danger-soft:     #fbe5e8;
+
+  /* Layout */
+  --pane-gap:        1px;
+  --radius:          8px;
+  --radius-sm:       6px;
+  --shadow:          0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+  --shadow-lg:       0 4px 24px rgba(0,30,87,0.10);
+
+  /* Type */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--ntt-blue-soft);
+  color: var(--ntt-blue-dark);
+}

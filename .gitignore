@@ -25,3 +25,19 @@ filelist.txt
 .idea/
 .DS_Store
 Thumbs.db
+
+# Additional common artifacts
+*.class
+*.py[cod]
+*.jar
+target/
+TEST*.xml
+*.app
+*.exe
+*.war
+*.mp4
+*.tiff
+*.avi
+*.flv
+*.mov
+*.wmv

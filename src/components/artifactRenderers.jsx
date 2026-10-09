@@ -100,6 +100,11 @@ export function renderGate2(a) {
   );
 }
 
+function hasCertainty(a) {
+  return ['entity_changes', 'typelist_changes', 'pcf_changes', 'gosu_rule_changes', 'integration_changes']
+    .some(k => (a[k] || []).some(it => it && it.certainty));
+}
+
 export function renderGate3(a) {
   if (!a) return null;
   return (
@@ -110,8 +115,16 @@ export function renderGate3(a) {
       </div>
 
       {a.rating_impact?.has_rating_impact && (
-        <div className="callout danger">
-          <strong>Rating impact:</strong> {a.rating_impact.description}
+        <div className={`callout ${a.rating_impact.certainty === 'conditional' ? 'warn' : 'danger'}`}>
+          <strong>{a.rating_impact.certainty === 'conditional' ? 'Possible rating impact (conditional — not in the base estimate):' : 'Rating impact:'}</strong>{' '}
+          {a.rating_impact.description}
+        </div>
+      )}
+
+      {hasCertainty(a) && (
+        <div className="muted small">
+          Certainty: <strong>required</strong> items are sized in the estimate; <strong>conditional</strong> items are
+          only checked and shown as risk (P80). Edit an item's certainty if it is wrong before approving.
         </div>
       )}
 
@@ -134,7 +147,7 @@ export function renderGate3(a) {
       )}
 
       {(a.entity_changes || []).length > 0 && (
-        <ChangeTable label="Entity changes" rows={a.entity_changes} cols={['entity', 'change_type', 'description']} />
+        <ChangeTable label="Entity changes" rows={a.entity_changes} cols={['entity', 'change_type', 'certainty', 'description']} />
       )}
       {(a.typelist_changes || []).length > 0 && (
         <ChangeTable
@@ -143,27 +156,27 @@ export function renderGate3(a) {
             ...t,
             new_codes_str: (t.new_codes || []).join(', ') || '—'
           }))}
-          cols={['typelist', 'change_type', 'new_codes_str', 'description']}
-          headers={['Typelist', 'Type', 'New codes', 'Description']}
+          cols={['typelist', 'change_type', 'new_codes_str', 'certainty', 'description']}
+          headers={['Typelist', 'Type', 'New codes', 'Certainty', 'Description']}
         />
       )}
       {(a.pcf_changes || []).length > 0 && (
-        <ChangeTable label="PCF changes" rows={a.pcf_changes} cols={['pcf', 'description']} headers={['PCF', 'Description']} />
+        <ChangeTable label="PCF changes" rows={a.pcf_changes} cols={['pcf', 'certainty', 'description']} headers={['PCF', 'Certainty', 'Description']} />
       )}
       {(a.gosu_rule_changes || []).length > 0 && (
         <ChangeTable
           label="Gosu rule changes"
           rows={a.gosu_rule_changes}
-          cols={['rule_category', 'rule_name', 'change_type', 'description']}
-          headers={['Category', 'Rule name', 'Type', 'Description']}
+          cols={['rule_category', 'rule_name', 'change_type', 'certainty', 'description']}
+          headers={['Category', 'Rule name', 'Type', 'Certainty', 'Description']}
         />
       )}
       {(a.integration_changes || []).length > 0 && (
         <ChangeTable
           label="Integration changes"
           rows={a.integration_changes}
-          cols={['integration', 'change_type', 'description']}
-          headers={['Integration', 'Type', 'Description']}
+          cols={['integration', 'change_type', 'certainty', 'description']}
+          headers={['Integration', 'Type', 'Certainty', 'Description']}
         />
       )}
     </div>
@@ -219,10 +232,10 @@ export function renderGate4(a, _jiraResult, gate4Extras) {
               {DELIVERY_GRADES.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
             <span className="muted small">
-              Changes Dev/QA/Architect hours only — recalculated instantly, no agent call.
+              Sets the headline estimate and story points used for Jira — recalculated instantly, no agent call.
             </span>
           </div>
-          {currentGrade !== 'Silver2' && (
+          {currentGrade !== 'Silver2' && !ce?.estimates_by_grade && (
             <div className="callout warn" style={{ marginTop: 6 }}>
               This adjustment is seeded from the COCOMO II personnel-capability model, not calibrated
               against internal delivery data — treat it as a starting shape, not a fact.
@@ -238,11 +251,70 @@ export function renderGate4(a, _jiraResult, gate4Extras) {
           <div className="artifact-section">
             <span className="artifact-label">Effort summary</span>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'baseline' }}>
-              <div><strong style={{ fontSize: 24 }}>{ce.total_hours}h</strong> <span className="muted small">total</span></div>
+              <div><strong style={{ fontSize: 24 }}>{ce.total_hours}h</strong> <span className="muted small">{ce.p80_hours != null ? 'P50 (likely)' : 'total'}</span></div>
+              {ce.p80_hours != null && (
+                <div><strong style={{ fontSize: 18 }}>{ce.p80_hours}h</strong> <span className="muted small">P80 (with unconfirmed risk)</span></div>
+              )}
               <div><strong style={{ fontSize: 18 }}>{ce.story_points}</strong> <span className="muted small">story points</span></div>
               <div><span className="artifact-pill warn">{ce.confidence_band}</span></div>
+              {ce.feature_class && <div><span className="artifact-pill">{ce.feature_class.replace(/_/g, ' ')}</span></div>}
             </div>
           </div>
+
+          {Array.isArray(ce.estimates_by_grade) && (
+            <div className="artifact-section">
+              <span className="artifact-label">Estimate by level</span>
+              <table className="artifact-table">
+                <thead>
+                  <tr><th>Level</th><th>P50</th><th>P80</th><th>Story points</th><th>BA</th><th>Dev</th><th>QA</th><th>Architect</th></tr>
+                </thead>
+                <tbody>
+                  {ce.estimates_by_grade.map(e => (
+                    <tr key={e.grade} style={e.grade === ce.assumed_delivery_grade ? { fontWeight: 600 } : undefined}>
+                      <td>{e.grade}{e.grade === ce.assumed_delivery_grade ? ' (selected)' : ''}</td>
+                      <td>{e.total_hours}h</td>
+                      <td>{e.p80_hours}h</td>
+                      <td>{e.story_points}</td>
+                      <td>{e.hours_by_role.BA}h</td>
+                      <td>{e.hours_by_role.Dev}h</td>
+                      <td>{e.hours_by_role.QA}h</td>
+                      <td>{e.hours_by_role.Architect}h</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="muted small" style={{ marginTop: 6 }}>
+                P50 = likely hours; P80 adds unconfirmed risk. Level differences vary by type of work and are
+                provisional until calibrated against Alchemy delivery data.
+              </div>
+            </div>
+          )}
+
+          {ce.tracks && (
+            <div className="artifact-section">
+              <span className="artifact-label">Hours by track</span>
+              <table className="artifact-table">
+                <thead><tr><th>Track</th><th>Hours</th><th>Covers</th></tr></thead>
+                <tbody>
+                  <tr><td>Implementation</td><td>{ce.tracks.implementation}h</td><td className="muted small">BA analysis + Dev build</td></tr>
+                  <tr><td>Validation</td><td>{ce.tracks.validation}h</td><td className="muted small">QA, scaled to distinct scenarios</td></tr>
+                  <tr><td>Governance</td><td>{ce.tracks.governance}h</td><td className="muted small">Design review, sign-off, release — fixed per change</td></tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {(ce.contingency_drivers?.length > 0 || ce.calculation_trace?.evidence_verification?.dropped_entries?.length > 0) && (
+            <div className="artifact-section">
+              <span className="artifact-label">Not in the P50 — unconfirmed risk</span>
+              <ul className="artifact-list">
+                {(ce.contingency_drivers || []).map((d, i) => <li key={`d${i}`}>{d}</li>)}
+                {(ce.calculation_trace?.evidence_verification?.dropped_entries || []).map((d, i) => (
+                  <li key={`x${i}`}>Evidence discarded: "{d.scenario_title}" is not an approved acceptance criteria scenario</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="artifact-section">
             <span className="artifact-label">Hours by role</span>

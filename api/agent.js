@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { parseBody, jsonResponse, errorResponse } from './_lib/parseBody.js';
 import { SYSTEM_PROMPT } from './_lib/prompts/system.js';
@@ -242,7 +243,13 @@ export default async function handler(req, res) {
   // ---------- effort_estimate: enrich agent's complexity inputs with computed estimate ----------
   if (gate === 'effort_estimate' && artifact && artifact.complexity_inputs) {
     try {
-      const computed = computeEstimate(artifact.complexity_inputs);
+      // Pass the APPROVED acceptance criteria and design note so the estimator
+      // verifies the evidence map and caps counts at REQUIRED design items,
+      // instead of trusting the agent's own counts and citations.
+      const computed = computeEstimate(artifact.complexity_inputs, {
+        acceptanceCriteria: prior_artifacts?.['acceptance_criteria'],
+        designNote: prior_artifacts?.['design_note']
+      });
       artifact = {
         ...artifact,
         computed_estimate: computed

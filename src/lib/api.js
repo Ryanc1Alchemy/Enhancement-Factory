@@ -82,9 +82,14 @@ export const api = {
     // re-invoke Claude (slower, costs tokens, and introduces non-determinism
     // for a calculation that has none). See src/hooks/useAgentRun.js
     // recomputeEstimate().
-    compute({ complexity_inputs, assumed_delivery_grade }) {
+    compute({ complexity_inputs, assumed_delivery_grade, acceptance_criteria, design_note }) {
       return postJSON('/api/estimate', {
-        complexity_inputs: { ...complexity_inputs, assumed_delivery_grade }
+        complexity_inputs: { ...complexity_inputs, assumed_delivery_grade },
+        // Approved AC lets the estimator verify the evidence map the same way
+        // it does inside /api/agent — otherwise a grade change would silently
+        // re-admit unverified evidence.
+        acceptance_criteria,
+        design_note
       });
     }
   }

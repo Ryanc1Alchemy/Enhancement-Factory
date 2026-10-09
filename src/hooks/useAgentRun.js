@@ -276,7 +276,9 @@ export function useAgentRun() {
     try {
       const computed = await api.estimate.compute({
         complexity_inputs: artifact.complexity_inputs,
-        assumed_delivery_grade: assumedGrade
+        assumed_delivery_grade: assumedGrade,
+        acceptance_criteria: s.acceptedArtifacts['acceptance_criteria'] || s.artifacts['acceptance_criteria'],
+        design_note: s.acceptedArtifacts['design_note'] || s.artifacts['design_note']
       });
       setState(prev => ({
         ...prev,

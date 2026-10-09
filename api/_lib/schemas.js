@@ -123,9 +123,17 @@ export const TOOLS = {
             properties: {
               entity: { type: 'string', description: 'e.g., "Vehicle"' },
               change_type: { type: 'string', enum: ['new', 'extended', 'modified'] },
+              certainty: {
+                type: 'string',
+                enum: ['required', 'conditional'],
+                description:
+                  'required = the request cannot be delivered without this change. conditional = only needed if something ' +
+                  'unconfirmed turns out to be true (e.g. "if the client rates on breed", "if a custom rule hard-codes values"). ' +
+                  'Things to check or regression-test are conditional, not required.'
+              },
               description: { type: 'string' }
             },
-            required: ['entity', 'change_type', 'description']
+            required: ['entity', 'change_type', 'certainty', 'description']
           }
         },
         typelist_changes: {
@@ -136,9 +144,17 @@ export const TOOLS = {
               typelist: { type: 'string', description: 'e.g., "VehicleFuelType"' },
               change_type: { type: 'string', enum: ['new', 'extended'] },
               new_codes: { type: 'array', items: { type: 'string' } },
+              certainty: {
+                type: 'string',
+                enum: ['required', 'conditional'],
+                description:
+                  'required = the request cannot be delivered without this change. conditional = only needed if something ' +
+                  'unconfirmed turns out to be true (e.g. "if the client rates on breed", "if a custom rule hard-codes values"). ' +
+                  'Things to check or regression-test are conditional, not required.'
+              },
               description: { type: 'string' }
             },
-            required: ['typelist', 'change_type', 'description']
+            required: ['typelist', 'change_type', 'certainty', 'description']
           }
         },
         pcf_changes: {
@@ -147,9 +163,17 @@ export const TOOLS = {
             type: 'object',
             properties: {
               pcf: { type: 'string', description: 'e.g., "PolicyInfoDV.pcf"' },
+              certainty: {
+                type: 'string',
+                enum: ['required', 'conditional'],
+                description:
+                  'required = the request cannot be delivered without this change. conditional = only needed if something ' +
+                  'unconfirmed turns out to be true (e.g. "if the client rates on breed", "if a custom rule hard-codes values"). ' +
+                  'Things to check or regression-test are conditional, not required.'
+              },
               description: { type: 'string' }
             },
-            required: ['pcf', 'description']
+            required: ['pcf', 'certainty', 'description']
           }
         },
         gosu_rule_changes: {
@@ -163,9 +187,17 @@ export const TOOLS = {
               },
               rule_name: { type: 'string' },
               change_type: { type: 'string', enum: ['new', 'modified'] },
+              certainty: {
+                type: 'string',
+                enum: ['required', 'conditional'],
+                description:
+                  'required = the request cannot be delivered without this change. conditional = only needed if something ' +
+                  'unconfirmed turns out to be true (e.g. "if the client rates on breed", "if a custom rule hard-codes values"). ' +
+                  'Things to check or regression-test are conditional, not required.'
+              },
               description: { type: 'string' }
             },
-            required: ['rule_category', 'rule_name', 'change_type', 'description']
+            required: ['rule_category', 'rule_name', 'change_type', 'certainty', 'description']
           }
         },
         integration_changes: {
@@ -175,18 +207,33 @@ export const TOOLS = {
             properties: {
               integration: { type: 'string' },
               change_type: { type: 'string', enum: ['new', 'modified'] },
+              certainty: {
+                type: 'string',
+                enum: ['required', 'conditional'],
+                description:
+                  'required = the request cannot be delivered without this change. conditional = only needed if something ' +
+                  'unconfirmed turns out to be true (e.g. "if the client rates on breed", "if a custom rule hard-codes values"). ' +
+                  'Things to check or regression-test are conditional, not required.'
+              },
               description: { type: 'string' }
             },
-            required: ['integration', 'change_type', 'description']
+            required: ['integration', 'change_type', 'certainty', 'description']
           }
         },
         rating_impact: {
           type: 'object',
           properties: {
             has_rating_impact: { type: 'boolean' },
+            certainty: {
+              type: 'string',
+              enum: ['required', 'conditional', 'none'],
+              description:
+                'required = the request itself changes premium, rates, factors or discounts. conditional = rating MIGHT be ' +
+                'affected depending on unconfirmed client configuration (needs live Rate Management check). none = no rating impact.'
+            },
             description: { type: 'string', description: 'If has_rating_impact is true, describe. Else empty string.' }
           },
-          required: ['has_rating_impact', 'description']
+          required: ['has_rating_impact', 'certainty', 'description']
         },
         required_skills: {
           type: 'array',
@@ -282,9 +329,56 @@ export const TOOLS = {
               type: 'string',
               enum: ['simple', 'medium', 'complex'],
               description:
-                'Your subjective complexity rating, used as a multiplier. Must reflect the acceptance criteria as well as ' +
-                'the design note -- e.g. multiple edge-case/negative scenarios implying non-trivial validation or ' +
-                'error-handling logic should push this toward "medium" or "complex" even if the design note alone looked simple.'
+                'Complexity of the Gosu rule and integration LOGIC. It only scales verified rule/integration work -- ' +
+                'never typelist/entity/PCF configuration or QA. Rate it on branching, error handling and data ' +
+                'transformation in that logic, not on how many acceptance criteria scenarios exist.'
+            },
+            complexity_evidence: {
+              type: 'object',
+              description:
+                'Evidence-first breakdown that links complexity inputs to concrete approved acceptance criteria scenarios. ' +
+                'Use this to prevent speculative inflation: only count confirmed implementation/test complexity as "confirmed"; ' +
+                'put unverified risk into "assumptions" rather than silently inflating counts.',
+              properties: {
+                confirmed_by_scenario: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      scenario_title: {
+                        type: 'string',
+                        description: 'Copy the approved acceptance criteria scenario title EXACTLY. The backend verifies it; titles that do not match an approved scenario are discarded.'
+                      },
+                      scenario_type: { type: 'string', enum: ['happy_path', 'edge_case', 'negative'] },
+                      impacts: {
+                        type: 'array',
+                        items: {
+                          type: 'string',
+                          enum: [
+                            'entity_change',
+                            'typelist_change',
+                            'pcf_change',
+                            'gosu_rule_change',
+                            'integration_change',
+                            'rating_change',
+                            'test_complexity'
+                          ]
+                        }
+                      },
+                      rationale: { type: 'string' }
+                    },
+                    required: ['scenario_title', 'scenario_type', 'impacts', 'rationale']
+                  }
+                },
+                assumptions: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'Potential complexity risks that are plausible but not confirmed by approved artifacts/scenarios. ' +
+                    'List them as assumptions instead of treating them as confirmed implementation scope.'
+                }
+              },
+              required: ['confirmed_by_scenario', 'assumptions']
             }
           },
           required: [
@@ -294,7 +388,8 @@ export const TOOLS = {
             'gosu_rule_changes_count',
             'integration_changes_count',
             'has_rating_impact',
-            'overall_complexity'
+            'overall_complexity',
+            'complexity_evidence'
           ]
         },
         narrative: {

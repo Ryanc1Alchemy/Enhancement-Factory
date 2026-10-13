@@ -72,6 +72,25 @@ CREATE TABLE IF NOT EXISTS agent_runs (
 );
 ```
 
+Save & resume adds these columns automatically (additive, safe on an existing table):
+`schema_version INT`, `state JSONB`, `title TEXT`, `revision INT NOT NULL DEFAULT 0`,
+`waiting_on TEXT`, `waiting_reason TEXT`, `waiting_since TIMESTAMPTZ`.
+
+**Local development:** the app uses `@neondatabase/serverless` (SQL over HTTP), which
+does not connect to a plain local Postgres. Use a Neon `dev` branch and put its
+`DATABASE_URL` in `.env` (or run Neon Local, which proxies to a Neon branch).
+Without `DATABASE_URL` the app works exactly as before — runs just aren't saved.
+
+### Save & resume
+
+With a database configured, runs save automatically after each gate settles
+(never while the agent is working). The start screen lists **Saved runs**;
+**Open** reopens a run at the gate it was left on — including a gate that was
+still awaiting review. **Park for review** records who the run is waiting on
+and why; the list shows it as *Waiting on review · N days*. If the same run is
+changed in another tab, this tab stops saving and offers **Reload this run**.
+Runs saved before this feature open read-only. Design: `docs/save-resume-design.md`.
+
 ### 5. Open the deployed URL
 
 Pick a scenario, watch the agent work through six gates, approve each one, end with a real Jira ticket.

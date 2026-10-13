@@ -1,5 +1,7 @@
 import RequestInput from './RequestInput.jsx';
 import ArtifactCard from './ArtifactCard.jsx';
+import SavedRuns from './SavedRuns.jsx';
+import RunStatusBar from './RunStatusBar.jsx';
 import { GATES } from '../lib/gates.js';
 
 export default function ArtifactStack({ state, actions }) {
@@ -13,11 +15,22 @@ export default function ArtifactStack({ state, actions }) {
       </div>
 
       <div className="stack">
-        <RequestInput
-          onSubmit={actions.startRun}
-          disabled={state.busy || started}
-          started={started}
-        />
+        {!started && (
+          <RequestInput
+            onSubmit={actions.startRun}
+            disabled={state.busy || started}
+            started={started}
+          />
+        )}
+
+        {!started && <SavedRuns onOpen={actions.resumeRun} disabled={state.busy} />}
+
+        {started && (
+          <div className="request-entry">
+            <h3 style={{ marginBottom: 6 }}>{state.request}</h3>
+            <RunStatusBar state={state} actions={actions} />
+          </div>
+        )}
 
         {started && (
           <div className="cards">
@@ -31,7 +44,7 @@ export default function ArtifactStack({ state, actions }) {
                 state={state.gateStates[g.id]}
                 artifact={state.artifacts[g.id]}
                 jiraResult={g.id === 'jira_ticket' ? state.jiraResult : null}
-                busy={state.busy}
+                busy={state.busy || state.readOnly || state.saveStatus === 'conflict'}
                 onAccept={actions.acceptGate}
                 onReject={actions.rejectGate}
                 onEdit={actions.editAndAcceptGate}

@@ -72,7 +72,7 @@ export const api = {
   runs: {
     save(run) { return postJSON('/api/runs?action=save', run, runsAuthHeaders()); },
     get(id) { return getJSON(`/api/runs?action=get&id=${encodeURIComponent(id)}`, runsAuthHeaders()); },
-    list() { return getJSON('/api/runs?action=list'); }
+    list() { return getJSON('/api/runs?action=list', runsAuthHeaders()); }
   },
   estimate: {
     // Direct call to the deterministic estimator endpoint — bypasses /api/agent

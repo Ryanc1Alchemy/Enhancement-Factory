@@ -147,6 +147,25 @@ describe('/api/runs (fake database)', () => {
     expect((await call({ url: '/api/runs?action=list', headers: { 'x-runs-secret': 's3cret' } })).status).toBe(200);
   });
 
+  it('deletes a saved run by id', async () => {
+    responder = q => q.text.startsWith('DELETE FROM agent_runs') ? [{ run_id: baseSave.run_id }] : [];
+    const { status, json } = await call({
+      method: 'POST',
+      url: '/api/runs?action=delete',
+      body: { run_id: baseSave.run_id }
+    });
+    expect(status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    const del = queries.find(q => q.text.startsWith('DELETE FROM agent_runs'));
+    expect(del.values).toContain(baseSave.run_id);
+  });
+
+  it('delete validates required id and missing rows', async () => {
+    expect((await call({ method: 'POST', url: '/api/runs?action=delete', body: {} })).status).toBe(400);
+    responder = q => q.text.startsWith('DELETE FROM agent_runs') ? [] : [];
+    expect((await call({ method: 'POST', url: '/api/runs?action=delete', body: { run_id: baseSave.run_id } })).status).toBe(404);
+  });
+
   it('without a database it reports db_unavailable and runs no queries', async () => {
     dbOn = false;
     const { json } = await call({ url: '/api/runs?action=list' });

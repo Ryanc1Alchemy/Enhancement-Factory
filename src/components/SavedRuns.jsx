@@ -34,6 +34,7 @@ export function sortRuns(runs) {
 
 export default function SavedRuns({ onOpen, disabled }) {
   const [state, setState] = useState({ loading: true, runs: [], unavailable: false, error: null });
+  const [deleting, setDeleting] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +47,20 @@ export default function SavedRuns({ onOpen, disabled }) {
       .catch(err => { if (!cancelled) setState({ loading: false, runs: [], unavailable: false, error: err.message }); });
     return () => { cancelled = true; };
   }, []);
+
+  const onDelete = async run => {
+    if (!window.confirm(`Delete saved run "${run.title || run.request}"? This cannot be undone.`)) return;
+    setDeleting(prev => ({ ...prev, [run.run_id]: true }));
+    setState(prev => ({ ...prev, error: null }));
+    try {
+      await api.runs.remove(run.run_id);
+      setState(prev => ({ ...prev, runs: prev.runs.filter(r => r.run_id !== run.run_id) }));
+    } catch (err) {
+      setState(prev => ({ ...prev, error: err.message || 'Could not delete run.' }));
+    } finally {
+      setDeleting(prev => ({ ...prev, [run.run_id]: false }));
+    }
+  };
 
   if (state.unavailable) return null;
 
@@ -79,7 +94,7 @@ export default function SavedRuns({ onOpen, disabled }) {
                     )}
                   </td>
                   <td className="muted small">{r.updated_at ? new Date(r.updated_at).toLocaleString() : '—'}</td>
-                  <td>
+                  <td style={{ display: 'flex', gap: 8 }}>
                     <button
                       className="btn btn-ghost btn-sm"
                       onClick={() => onOpen(r.run_id)}
@@ -91,6 +106,14 @@ export default function SavedRuns({ onOpen, disabled }) {
                       }
                     >
                       {r.resumable ? 'Open' : 'View'}
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => onDelete(r)}
+                      disabled={disabled || deleting[r.run_id]}
+                      title="Delete this saved run"
+                    >
+                      {deleting[r.run_id] ? 'Deleting…' : 'Delete'}
                     </button>
                   </td>
                 </tr>

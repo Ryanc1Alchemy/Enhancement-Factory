@@ -4,7 +4,15 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 
 let listResult;
-vi.mock('../lib/api.js', () => ({ api: { runs: { list: vi.fn(async () => listResult) } } }));
+const removeRun = vi.fn(async () => ({ ok: true }));
+vi.mock('../lib/api.js', () => ({
+  api: {
+    runs: {
+      list: vi.fn(async () => listResult),
+      remove: (...args) => removeRun(...args)
+    }
+  }
+}));
 
 const { default: SavedRuns, daysSince, sortRuns } = await import('./SavedRuns.jsx');
 const { saveText } = await import('./RunStatusBar.jsx');
@@ -22,7 +30,12 @@ const now = Date.now();
 const iso = daysAgo => new Date(now - daysAgo * 86400000).toISOString();
 
 describe('SavedRuns', () => {
-  beforeEach(() => { listResult = { runs: [] }; });
+  beforeEach(() => {
+    listResult = { runs: [] };
+    removeRun.mockReset();
+    removeRun.mockResolvedValue({ ok: true });
+    window.confirm = vi.fn(() => true);
+  });
 
   it('renders nothing when the database is not configured', async () => {
     listResult = { db_unavailable: true };
@@ -44,15 +57,34 @@ describe('SavedRuns', () => {
     expect(text).toContain('Waiting on review');
     expect(text).toContain('on Lead architect · 3 days');
     const buttons = [...div.querySelectorAll('button')];
-    expect(buttons.map(b => b.textContent)).toEqual(['Open', 'View', 'View']);
-    expect(buttons[2].disabled).toBe(true); // pre-reorder cannot be opened
-    await act(async () => { buttons[0].click(); });
+    const openViewButtons = buttons.filter(b => b.textContent === 'Open' || b.textContent === 'View');
+    expect(openViewButtons.map(b => b.textContent)).toEqual(['Open', 'View', 'View']);
+    expect(openViewButtons[2].disabled).toBe(true); // pre-reorder cannot be opened
+    await act(async () => { openViewButtons[0].click(); });
     expect(onOpen).toHaveBeenCalledWith('a');
     unmount();
   });
 
   it('shows an empty-state message when nothing is saved', async () => {
     const { div, unmount } = await render(<SavedRuns onOpen={() => {}} />);
+    expect(div.textContent).toContain('No saved runs yet');
+    unmount();
+  });
+
+  it('deletes a run from the list after confirmation', async () => {
+    listResult = {
+      runs: [
+        { run_id: 'a', request: 'run a', title: 'run a', current_gate: 2, status: 'in_progress', updated_at: iso(0), resumable: true, is_pre_reorder: false }
+      ]
+    };
+    const { div, unmount } = await render(<SavedRuns onOpen={() => {}} />);
+    const buttons = [...div.querySelectorAll('button')];
+    const deleteBtn = buttons.find(b => b.textContent === 'Delete');
+    expect(deleteBtn).toBeTruthy();
+
+    await act(async () => { deleteBtn.click(); });
+    expect(window.confirm).toHaveBeenCalled();
+    expect(removeRun).toHaveBeenCalledWith('a');
     expect(div.textContent).toContain('No saved runs yet');
     unmount();
   });

@@ -5,10 +5,11 @@ import { getDb, dbAvailable } from './_lib/db.js';
 // /api/runs — save / load / list agent runs
 // ============================================================
 // Endpoints:
-//   POST   /api/runs?action=save     { run_id, request, current_gate, status, artifacts, history, jira_ticket,
-//                                       state?, title?, waiting_on?, waiting_reason?, expected_revision? }
-//   GET    /api/runs?action=get&id=  → returns run row (+ resumable flag)
-//   GET    /api/runs?action=list     → returns recent 25 runs (optional &status=waiting_review)
+//   POST   /api/runs?action=save      { run_id, request, current_gate, status, artifacts, history, jira_ticket,
+//                                        state?, title?, waiting_on?, waiting_reason?, expected_revision? }
+//   POST   /api/runs?action=delete    { run_id }
+//   GET    /api/runs?action=get&id=   → returns run row (+ resumable flag)
+//   GET    /api/runs?action=list      → returns recent 25 runs (optional &status=waiting_review)
 //
 // Save & resume (schema v3): `state` holds the full run snapshot
 // (src/lib/runSnapshot.js) so a run can be reopened exactly where it was left,
@@ -210,6 +211,16 @@ export default async function handler(req, res) {
         });
       }
       return jsonResponse(res, 200, { ok: true, revision: rows[0].revision });
+    }
+
+    if (req.method === 'POST' && action === 'delete') {
+      const body = await parseBody(req);
+      const runId = body?.run_id;
+      if (!runId) return errorResponse(res, 400, 'run_id required');
+
+      const rows = await sql`DELETE FROM agent_runs WHERE run_id = ${runId} RETURNING run_id`;
+      if (rows.length === 0) return errorResponse(res, 404, 'Run not found');
+      return jsonResponse(res, 200, { ok: true });
     }
 
     return errorResponse(res, 400, 'Unknown action');

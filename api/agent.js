@@ -201,6 +201,17 @@ export default async function handler(req, res) {
   try {
     response = await callClaude({ messages, tools });
   } catch (err) {
+    // Missing API key is a local/deployment configuration issue, not an upstream
+    // Claude failure. Return 500 with explicit detail so Gate 1 failures are
+    // immediately actionable in the UI.
+    if (String(err?.message || '').includes('ANTHROPIC_API_KEY is not set')) {
+      return errorResponse(
+        res,
+        500,
+        'Agent configuration error',
+        'ANTHROPIC_API_KEY is not set. Add it to your environment and restart the server.'
+      );
+    }
     return errorResponse(res, 502, 'Claude API error', err.message);
   }
 

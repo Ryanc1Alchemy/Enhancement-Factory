@@ -132,6 +132,33 @@ describe('save & resume leaves the gates unchanged', () => {
     expect(resumed.at(-1).data_dictionary).toBe(`SUMMARY(petline-project) for: ${REQUEST}`);
   });
 
+  it('resumed at gate 6, approving jira draft commits successfully', async () => {
+    const h1 = mountHook();
+    await act(async () => { await h1.ref.current.actions.startRun(REQUEST, BUNDLE); });
+    await settle();
+
+    await acceptUpTo(h1.ref, 5); // gates 1-5 accepted; jira_ticket is proposed
+    expect(h1.ref.current.state.gateStates.jira_ticket).toBe('proposed');
+    expect(h1.ref.current.state.artifacts.jira_ticket).toEqual({ gate: 'jira_ticket', content: 'artifact for jira_ticket' });
+    const runId = h1.ref.current.state.runId;
+    h1.unmount();
+
+    const h2 = mountHook();
+    await act(async () => { await h2.ref.current.actions.resumeRun(runId); });
+    await settle();
+
+    expect(h2.ref.current.state.gateStates.jira_ticket).toBe('proposed');
+    expect(h2.ref.current.state.readOnly).toBe(false);
+
+    await act(async () => { await h2.ref.current.actions.acceptGate('jira_ticket'); });
+    await settle();
+
+    expect(h2.ref.current.state.gateStates.jira_ticket).toBe('committed');
+    expect(h2.ref.current.state.jiraResult?.commit_result?.mode).toBe('simulated');
+    expect(h2.ref.current.state.readOnly).toBe(false);
+    h2.unmount();
+  });
+
   it('saves after a gate settles, never while the agent is working', async () => {
     const h = mountHook();
     await act(async () => { await h.ref.current.actions.startRun(REQUEST, BUNDLE); });

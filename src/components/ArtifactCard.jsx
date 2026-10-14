@@ -12,6 +12,7 @@ export default function ArtifactCard({
   state,
   artifact,
   jiraResult,
+  usage,
   busy,
   onAccept,
   onReject,
@@ -38,6 +39,9 @@ export default function ArtifactCard({
             <div>
               <div className="card-title">Gate {gateNumber} — {name}</div>
               <div className="muted small">{subtitle}</div>
+              <div className="muted small" style={{ marginTop: 2 }}>
+                Tokens: {formatUsage(usage)}
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -103,6 +107,22 @@ export default function ArtifactCard({
       )}
     </>
   );
+}
+
+function formatUsage(usage) {
+  if (!usage || typeof usage !== 'object') return '—';
+  const input = Number.isFinite(usage.input_tokens) ? usage.input_tokens : null;
+  const output = Number.isFinite(usage.output_tokens) ? usage.output_tokens : null;
+  const total = Number.isFinite(usage.total_tokens)
+    ? usage.total_tokens
+    : (Number.isFinite(input) && Number.isFinite(output) ? input + output : null);
+
+  if (!Number.isFinite(total) && !Number.isFinite(input) && !Number.isFinite(output)) return '—';
+
+  const totalPart = Number.isFinite(total) ? total.toLocaleString() : '—';
+  const inputPart = Number.isFinite(input) ? input.toLocaleString() : '—';
+  const outputPart = Number.isFinite(output) ? output.toLocaleString() : '—';
+  return `${totalPart} (in: ${inputPart}, out: ${outputPart})`;
 }
 
 function labelFor(state) {

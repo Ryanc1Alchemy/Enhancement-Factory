@@ -38,6 +38,7 @@ const initialState = {
   artifacts: {}, // proposed/current artifact per gate
   acceptedArtifacts: {}, // accepted artifacts only — passed to backend as prior_artifacts
   previousArtifacts: {}, // pre-regeneration artifact (for diff view)
+  gateUsage: {}, // token usage per gate: { '<gate id>': { input_tokens?, output_tokens?, total_tokens? } }
   conversation: [], // array of { who: 'system'|'user'|'agent', body: string, ts }
   jiraResult: null, // result of /api/runs commit_jira
   guidewireBundle: null, // parsed multi-area Guidewire Studio bundle (optional, attached at start)
@@ -70,6 +71,33 @@ function groundingFor(s, text) {
 function runStatusFor(s) {
   if (s.jiraResult?.commit_result?.mode === 'live') return 'completed';
   return s.runStatus === 'waiting_review' ? 'waiting_review' : 'in_progress';
+}
+
+function normalizeUsage(usage) {
+  if (!usage || typeof usage !== 'object') return null;
+  const inputTokens = Number.isFinite(usage.input_tokens)
+    ? usage.input_tokens
+    : Number.isFinite(usage.inputTokens)
+    ? usage.inputTokens
+    : null;
+  const outputTokens = Number.isFinite(usage.output_tokens)
+    ? usage.output_tokens
+    : Number.isFinite(usage.outputTokens)
+    ? usage.outputTokens
+    : null;
+  const totalTokens = Number.isFinite(usage.total_tokens)
+    ? usage.total_tokens
+    : Number.isFinite(usage.totalTokens)
+    ? usage.totalTokens
+    : (Number.isFinite(inputTokens) && Number.isFinite(outputTokens) ? inputTokens + outputTokens : null);
+
+  if (!Number.isFinite(inputTokens) && !Number.isFinite(outputTokens) && !Number.isFinite(totalTokens)) return null;
+
+  return {
+    ...(Number.isFinite(inputTokens) ? { input_tokens: inputTokens } : {}),
+    ...(Number.isFinite(outputTokens) ? { output_tokens: outputTokens } : {}),
+    ...(Number.isFinite(totalTokens) ? { total_tokens: totalTokens } : {})
+  };
 }
 
 export function useAgentRun({ saveDelayMs = DEFAULT_SAVE_DELAY_MS } = {}) {
@@ -229,9 +257,11 @@ export function useAgentRun({ saveDelayMs = DEFAULT_SAVE_DELAY_MS } = {}) {
         prior_artifacts: {},
         data_dictionary: bundleSummary
       });
+      const usage = normalizeUsage(res.usage);
       setState(s => ({
         ...s,
         artifacts: { ...s.artifacts, [firstGateId]: res.artifact },
+        gateUsage: usage ? { ...s.gateUsage, [firstGateId]: usage } : s.gateUsage,
         gateStates: { ...s.gateStates, [firstGateId]: STATES.PROPOSED },
         conversation: [...s.conversation, { who: 'agent', body: 'Gate 1 — Request Analysis ready for review.', ts: Date.now() }],
         busy: false
@@ -278,9 +308,11 @@ export function useAgentRun({ saveDelayMs = DEFAULT_SAVE_DELAY_MS } = {}) {
           prior_artifacts: newAccepted,
           data_dictionary: groundingFor(s, s.request)
         });
+        const usage = normalizeUsage(res.usage);
         setState(prev => ({
           ...prev,
           artifacts: { ...prev.artifacts, [nextId]: res.artifact },
+          gateUsage: usage ? { ...prev.gateUsage, [nextId]: usage } : prev.gateUsage,
           gateStates: { ...prev.gateStates, [nextId]: STATES.PROPOSED },
           conversation: [...prev.conversation, { who: 'agent', body: `${res.gate_name} ready for review.`, ts: Date.now() }],
           busy: false
@@ -364,9 +396,11 @@ export function useAgentRun({ saveDelayMs = DEFAULT_SAVE_DELAY_MS } = {}) {
         previous_artifact: previous,
         data_dictionary: groundingFor(s, `${s.request} ${feedback}`)
       });
+      const usage = normalizeUsage(res.usage);
       setState(prev => ({
         ...prev,
         artifacts: { ...prev.artifacts, [gateId]: res.artifact },
+        gateUsage: usage ? { ...prev.gateUsage, [gateId]: usage } : prev.gateUsage,
         gateStates: { ...prev.gateStates, [gateId]: STATES.PROPOSED },
         conversation: [...prev.conversation, { who: 'agent', body: `Gate regenerated.`, ts: Date.now() }],
         busy: false
@@ -560,9 +594,11 @@ export function useAgentRun({ saveDelayMs = DEFAULT_SAVE_DELAY_MS } = {}) {
         prior_artifacts: s.acceptedArtifacts,
         data_dictionary: groundingFor(s, s.request)
       });
+      const usage = normalizeUsage(res.usage);
       setState(prev => ({
         ...prev,
         artifacts: { ...prev.artifacts, [gateId]: res.artifact },
+        gateUsage: usage ? { ...prev.gateUsage, [gateId]: usage } : prev.gateUsage,
         gateStates: { ...prev.gateStates, [gateId]: STATES.PROPOSED },
         conversation: [...prev.conversation, { who: 'agent', body: `${res.gate_name || gateId} ready for review.`, ts: Date.now() }],
         busy: false

@@ -44,6 +44,7 @@ export default function ArtifactStack({ state, actions }) {
                 state={state.gateStates[g.id]}
                 artifact={state.artifacts[g.id]}
                 jiraResult={g.id === 'jira_ticket' ? state.jiraResult : null}
+                usage={state.gateUsage?.[g.id] || null}
                 busy={state.busy || state.readOnly || state.saveStatus === 'conflict'}
                 onAccept={actions.acceptGate}
                 onReject={actions.rejectGate}

@@ -16,8 +16,8 @@ The six gates:
   Gate 1 — Request Analysis      → tool: produce_request_analysis
   Gate 2 — Scope Definition      → tool: produce_scope_definition
   Gate 3 — Design Note           → tool: produce_design_note
-  Gate 4 — Effort Estimate       → tool: produce_effort_estimate
-  Gate 5 — Acceptance Criteria   → tool: produce_acceptance_criteria
+  Gate 4 — Acceptance Criteria   → tool: produce_acceptance_criteria
+  Gate 5 — Effort Estimate       → tool: produce_effort_estimate
   Gate 6 — Jira Ticket Payload   → tool: produce_jira_payload (then raise_jira_ticket on final approval)
 
 When the user rejects or edits an artifact, treat their feedback as authoritative. Regenerate the artifact incorporating their input. Do not argue. Do not say you understand — just produce the better artifact.

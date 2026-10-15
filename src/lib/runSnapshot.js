@@ -37,6 +37,7 @@ export function toSnapshot(state) {
     acceptedArtifacts: { ...state.acceptedArtifacts },
     previousArtifacts: { ...state.previousArtifacts },
     conversation: [...(state.conversation || [])],
+    gateUsage: { ...(state.gateUsage || {}) },
     jiraResult: state.jiraResult || null,
     bundleSummary: state.bundleSummary || null,
     bundleDescription: Array.isArray(state.bundleDescription) ? [...state.bundleDescription] : []
@@ -96,6 +97,7 @@ export function fromSnapshot(snapshot) {
       acceptedArtifacts,
       previousArtifacts: { ...(snapshot.previousArtifacts || {}) },
       conversation: Array.isArray(snapshot.conversation) ? [...snapshot.conversation] : [],
+      gateUsage: { ...(snapshot.gateUsage || {}) },
       jiraResult: snapshot.jiraResult || null,
       bundleSummary: snapshot.bundleSummary || null,
       bundleDescription: Array.isArray(snapshot.bundleDescription) ? [...snapshot.bundleDescription] : []

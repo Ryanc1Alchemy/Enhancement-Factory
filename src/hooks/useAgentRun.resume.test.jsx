@@ -186,6 +186,29 @@ describe('save & resume leaves the gates unchanged', () => {
     h.unmount();
   });
 
+  it('preserves per-gate token usage after park and resume', async () => {
+    const h1 = mountHook();
+    await act(async () => { await h1.ref.current.actions.startRun(REQUEST, null); });
+    await settle();
+
+    // test API mocks do not emit usage; inject representative usage to verify
+    // snapshot persistence + resume hydration behavior explicitly.
+    h1.ref.current.state.gateUsage.request_analysis = { input_tokens: 2553, output_tokens: 835, total_tokens: 3388 };
+
+    await act(async () => { h1.ref.current.actions.parkRun({ waitingOn: 'test1', reason: 'test 1' }); });
+    await settle();
+
+    const runId = h1.ref.current.state.runId;
+    h1.unmount();
+
+    const h2 = mountHook();
+    await act(async () => { await h2.ref.current.actions.resumeRun(runId); });
+    await settle();
+
+    expect(h2.ref.current.state.gateUsage.request_analysis).toEqual({ input_tokens: 2553, output_tokens: 835, total_tokens: 3388 });
+    h2.unmount();
+  });
+
   it('a save refused by another tab (409) stops auto-saving and says so', async () => {
     const { api } = await import('../lib/api.js');
     const h = mountHook();

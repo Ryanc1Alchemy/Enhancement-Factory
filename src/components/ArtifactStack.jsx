@@ -49,6 +49,7 @@ export default function ArtifactStack({ state, actions }) {
                 onAccept={actions.acceptGate}
                 onReject={actions.rejectGate}
                 onEdit={actions.editAndAcceptGate}
+                onReopen={actions.reopenGate}
                 onRecomputeEstimate={g.id === 'effort_estimate' ? actions.recomputeEstimate : undefined}
               />
             ))}

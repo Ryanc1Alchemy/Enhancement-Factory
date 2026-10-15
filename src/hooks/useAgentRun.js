@@ -461,6 +461,60 @@ export function useAgentRun({ saveDelayMs = DEFAULT_SAVE_DELAY_MS } = {}) {
     await acceptGateWith(gateId, editedArtifact);
   }, [acceptGateWith]);
 
+  // ------------ reopen a previously accepted gate and reset everything after it ------------
+  // Any upstream change can invalidate downstream artifacts and estimates.
+  // Reopening gate N keeps N's current artifact editable, but clears N+1..end.
+  const reopenGate = useCallback((gateId) => {
+    const s = stateRef.current;
+    const gateIdx = GATE_ORDER.indexOf(gateId);
+    if (gateIdx === -1) return;
+    if (s.readOnly || s.busy || s.saveStatus === 'conflict') return;
+    const currentState = s.gateStates?.[gateId];
+    if (currentState !== STATES.ACCEPTED && currentState !== STATES.COMMITTED) return;
+
+    const resetIds = GATE_ORDER.slice(gateIdx + 1);
+    const resetSet = new Set(resetIds);
+
+    setState(prev => {
+      const gateStates = { ...prev.gateStates, [gateId]: STATES.PROPOSED };
+      for (const id of resetIds) gateStates[id] = STATES.PENDING;
+
+      const acceptedArtifacts = { ...prev.acceptedArtifacts };
+      for (const id of [gateId, ...resetIds]) delete acceptedArtifacts[id];
+
+      const artifacts = { ...prev.artifacts };
+      for (const id of resetIds) delete artifacts[id];
+
+      const previousArtifacts = { ...prev.previousArtifacts };
+      for (const id of resetIds) delete previousArtifacts[id];
+
+      const gateUsage = { ...prev.gateUsage };
+      for (const id of [gateId, ...resetIds]) delete gateUsage[id];
+
+      return {
+        ...prev,
+        gateStates,
+        acceptedArtifacts,
+        artifacts,
+        previousArtifacts,
+        gateUsage,
+        jiraResult: resetSet.has('jira_ticket') || gateId !== 'jira_ticket' ? null : prev.jiraResult,
+        runStatus: 'in_progress',
+        waitingOn: '',
+        waitingReason: '',
+        waitingSince: null,
+        conversation: [
+          ...prev.conversation,
+          {
+            who: 'system',
+            body: `Reopened gate ${gateId}. Cleared downstream gates: ${resetIds.length ? resetIds.join(', ') : '(none)'}.`,
+            ts: Date.now()
+          }
+        ]
+      };
+    });
+  }, []);
+
   // ------------ resume a saved run ------------
   // Loads the saved snapshot into the same state the gates already use. The
   // gate actions then carry on unchanged.
@@ -633,6 +687,7 @@ export function useAgentRun({ saveDelayMs = DEFAULT_SAVE_DELAY_MS } = {}) {
       reattachFiles,
       runPendingGate,
       dismissResumeNotes,
+      reopenGate,
       reset
     }
   };

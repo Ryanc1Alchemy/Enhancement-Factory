@@ -17,6 +17,7 @@ export default function ArtifactCard({
   onAccept,
   onReject,
   onEdit,
+  onReopen,
   onRecomputeEstimate
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -67,22 +68,43 @@ export default function ArtifactCard({
               )}
             </div>
 
-            {isProposed && (
+            {(isProposed || isAccepted) && (
               <div className="card-actions">
-                <button className="btn btn-ghost" onClick={() => setShowEdit(true)} disabled={busy}>
-                  Edit
-                </button>
-                <button className="btn btn-ghost" onClick={() => setShowReject(true)} disabled={busy}>
-                  Reject
-                </button>
+                {isProposed && (
+                  <>
+                    <button className="btn btn-ghost" onClick={() => setShowEdit(true)} disabled={busy}>
+                      Edit
+                    </button>
+                    <button className="btn btn-ghost" onClick={() => setShowReject(true)} disabled={busy}>
+                      Reject
+                    </button>
+                  </>
+                )}
+
+                {isAccepted && gate !== 'jira_ticket' && (
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      if (confirm(`Reopen ${name}? This will clear all downstream gates and require regeneration.`)) {
+                        onReopen(gate);
+                      }
+                    }}
+                    disabled={busy}
+                  >
+                    Reopen
+                  </button>
+                )}
+
                 <div className="spacer" />
-                <button
-                  className={gate === 'jira_ticket' ? 'btn btn-danger' : 'btn btn-primary'}
-                  onClick={() => onAccept(gate)}
-                  disabled={busy}
-                >
-                  {gate === 'jira_ticket' ? 'Approve & Raise Jira ticket' : 'Accept'}
-                </button>
+                {isProposed && (
+                  <button
+                    className={gate === 'jira_ticket' ? 'btn btn-danger' : 'btn btn-primary'}
+                    onClick={() => onAccept(gate)}
+                    disabled={busy}
+                  >
+                    {gate === 'jira_ticket' ? 'Approve & Raise Jira ticket' : 'Accept'}
+                  </button>
+                )}
               </div>
             )}
           </>

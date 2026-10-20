@@ -16,17 +16,21 @@ const inputs = {
 const ac = { scenarios: [{ title: 'New value is selectable', type: 'happy_path' }] };
 
 describe('Gate 4 card', () => {
-  it('shows P50/P80, tracks and the discarded evidence', () => {
+  it('shows P50/P80 and the estimate-by-level table, without the removed detail sections', () => {
     const ce = compute(inputs, { acceptanceCriteria: ac });
     const html = renderToStaticMarkup(renderGate4({ narrative: 'n', computed_estimate: ce }, null, { onRecomputeEstimate: () => {} }));
     expect(html).toContain('P50 (likely)');
     expect(html).toContain('P80 (with unconfirmed risk)');
-    expect(html).toContain('Hours by track');
-    expect(html).toContain('Evidence discarded');
     expect(html).toContain('A CONFIG MICRO');
     expect(html).toContain('Estimate by level');
     for (const g of ['Bronze1', 'Bronze2', 'Silver1', 'Silver2', 'Gold1', 'Gold2']) expect(html).toContain(g);
     expect(html).toContain('Silver2 (selected)');
+    // These detail sections were removed from the Gate 5 card per BA feedback.
+    expect(html).not.toContain('Hours by track');
+    expect(html).not.toContain('Not in the P50');
+    expect(html).not.toContain('Hours by role');
+    expect(html).not.toContain('Hours by location');
+    expect(html).not.toContain('Methodology:');
   });
 
   it('still renders an older saved estimate that has no P80 or tracks', () => {
@@ -40,6 +44,8 @@ describe('Gate 4 card', () => {
     expect(html).toContain('total');
     expect(html).not.toContain('Hours by track');
     expect(html).not.toContain('P80');
+    expect(html).not.toContain('Hours by role');
+    expect(html).not.toContain('Hours by location');
     // Decimal total (4.5h) is rounded UP to a whole number for display (5h).
     expect(html).toContain('5h');
     expect(html).not.toContain('4.5h');
@@ -60,6 +66,16 @@ describe('Gate 4 card', () => {
     expect(html).not.toContain('8.8h');
     // No decimal hour values should ever be rendered.
     expect(html).not.toMatch(/\d\.\d+h/);
+  });
+
+  it('does not render the removed detail sections even when the data is present', () => {
+    const ce = compute(inputs, { acceptanceCriteria: ac });
+    const html = renderToStaticMarkup(renderGate4({ narrative: 'n', computed_estimate: ce }, null, undefined));
+    expect(html).not.toContain('Hours by track');
+    expect(html).not.toContain('Not in the P50');
+    expect(html).not.toContain('Hours by role');
+    expect(html).not.toContain('Hours by location');
+    expect(html).not.toContain('Methodology:');
   });
 
   it('ceilHours rounds up and never down', () => {

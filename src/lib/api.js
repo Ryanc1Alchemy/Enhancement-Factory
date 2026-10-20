@@ -60,12 +60,13 @@ export const api = {
         data_dictionary
       });
     },
-    commitJira({ request, prior_artifacts }) {
+    commitJira({ request, prior_artifacts, jira_issue_type }) {
       return postJSON('/api/agent', {
         mode: 'commit_jira',
         gate: 'jira_ticket',
         request,
-        prior_artifacts
+        prior_artifacts,
+        jira_issue_type
       });
     }
   },

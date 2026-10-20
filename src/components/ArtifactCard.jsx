@@ -14,6 +14,8 @@ export default function ArtifactCard({
   jiraResult,
   usage,
   busy,
+  jiraIssueType,
+  onSetJiraIssueType,
   onAccept,
   onReject,
   onEdit,
@@ -56,6 +58,21 @@ export default function ArtifactCard({
         {!collapsed && !isPending && (
           <>
             <div className="card-body">
+              {gate === 'jira_ticket' && isProposed && (
+                <div className="artifact-section" style={{ marginBottom: 10 }}>
+                  <span className="artifact-label">Jira issue type</span>
+                  <select
+                    className="request-input"
+                    style={{ maxWidth: 200, padding: '6px 10px' }}
+                    value={jiraIssueType || 'Story'}
+                    onChange={e => onSetJiraIssueType && onSetJiraIssueType(e.target.value)}
+                    disabled={busy}
+                  >
+                    <option value="Story">Story</option>
+                    <option value="Epic">Epic</option>
+                  </select>
+                </div>
+              )}
               {isRegenerating && !artifact && (
                 <div className="muted">
                   <span className="spinner" />Agent is generating this artifact…

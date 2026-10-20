@@ -1,6 +1,8 @@
 // One renderer per gate. These are pure presentational functions.
 // They receive the artifact object (the agent's tool_use input) and return JSX.
 
+import { ceilHours, roundHoursForDisplay } from '../lib/hoursDisplay.js';
+
 export function renderGate1(a) {
   if (!a) return null;
   const confidenceClass =
@@ -251,9 +253,9 @@ export function renderGate4(a, _jiraResult, gate4Extras) {
           <div className="artifact-section">
             <span className="artifact-label">Effort summary</span>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'baseline' }}>
-              <div><strong style={{ fontSize: 24 }}>{ce.total_hours}h</strong> <span className="muted small">{ce.p80_hours != null ? 'P50 (likely)' : 'total'}</span></div>
+              <div><strong style={{ fontSize: 24 }}>{ceilHours(ce.total_hours)}h</strong> <span className="muted small">{ce.p80_hours != null ? 'P50 (likely)' : 'total'}</span></div>
               {ce.p80_hours != null && (
-                <div><strong style={{ fontSize: 18 }}>{ce.p80_hours}h</strong> <span className="muted small">P80 (with unconfirmed risk)</span></div>
+                <div><strong style={{ fontSize: 18 }}>{ceilHours(ce.p80_hours)}h</strong> <span className="muted small">P80 (with unconfirmed risk)</span></div>
               )}
               <div><strong style={{ fontSize: 18 }}>{ce.story_points}</strong> <span className="muted small">story points</span></div>
               <div><span className="artifact-pill warn">{ce.confidence_band}</span></div>
@@ -269,18 +271,21 @@ export function renderGate4(a, _jiraResult, gate4Extras) {
                   <tr><th>Level</th><th>P50</th><th>P80</th><th>Story points</th><th>BA</th><th>Dev</th><th>QA</th><th>Architect</th></tr>
                 </thead>
                 <tbody>
-                  {ce.estimates_by_grade.map(e => (
-                    <tr key={e.grade} style={e.grade === ce.assumed_delivery_grade ? { fontWeight: 600 } : undefined}>
-                      <td>{e.grade}{e.grade === ce.assumed_delivery_grade ? ' (selected)' : ''}</td>
-                      <td>{e.total_hours}h</td>
-                      <td>{e.p80_hours}h</td>
-                      <td>{e.story_points}</td>
-                      <td>{e.hours_by_role.BA}h</td>
-                      <td>{e.hours_by_role.Dev}h</td>
-                      <td>{e.hours_by_role.QA}h</td>
-                      <td>{e.hours_by_role.Architect}h</td>
-                    </tr>
-                  ))}
+                  {ce.estimates_by_grade.map(e => {
+                    const { hoursByRole, total } = roundHoursForDisplay(e.hours_by_role, e.total_hours);
+                    return (
+                      <tr key={e.grade} style={e.grade === ce.assumed_delivery_grade ? { fontWeight: 600 } : undefined}>
+                        <td>{e.grade}{e.grade === ce.assumed_delivery_grade ? ' (selected)' : ''}</td>
+                        <td>{total}h</td>
+                        <td>{ceilHours(e.p80_hours)}h</td>
+                        <td>{e.story_points}</td>
+                        <td>{hoursByRole.BA}h</td>
+                        <td>{hoursByRole.Dev}h</td>
+                        <td>{hoursByRole.QA}h</td>
+                        <td>{hoursByRole.Architect}h</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               <div className="muted small" style={{ marginTop: 6 }}>
@@ -321,9 +326,12 @@ export function renderGate4(a, _jiraResult, gate4Extras) {
             <table className="artifact-table">
               <thead><tr><th>Role</th><th>Hours</th></tr></thead>
               <tbody>
-                {Object.entries(ce.hours_by_role).map(([role, h]) => (
-                  <tr key={role}><td>{role}</td><td>{h}h</td></tr>
-                ))}
+                {(() => {
+                  const { hoursByRole } = roundHoursForDisplay(ce.hours_by_role, ce.total_hours);
+                  return Object.entries(hoursByRole).map(([role, h]) => (
+                    <tr key={role}><td>{role}</td><td>{h}h</td></tr>
+                  ));
+                })()}
               </tbody>
             </table>
           </div>
@@ -333,9 +341,13 @@ export function renderGate4(a, _jiraResult, gate4Extras) {
             <table className="artifact-table">
               <thead><tr><th>Location</th><th>Hours</th></tr></thead>
               <tbody>
-                {Object.entries(ce.hours_by_location).map(([loc, h]) => (
-                  <tr key={loc}><td>{loc.replace('_', ' ')}</td><td>{h}h</td></tr>
-                ))}
+                {(() => {
+                  const totalLoc = Object.values(ce.hours_by_location).reduce((s, v) => s + v, 0);
+                  const { hoursByRole: roundedLoc } = roundHoursForDisplay(ce.hours_by_location, totalLoc);
+                  return Object.entries(roundedLoc).map(([loc, h]) => (
+                    <tr key={loc}><td>{loc.replace('_', ' ')}</td><td>{h}h</td></tr>
+                  ));
+                })()}
               </tbody>
             </table>
             <div className="muted small" style={{ marginTop: 6 }}>{ce.location_split_assumption}</div>

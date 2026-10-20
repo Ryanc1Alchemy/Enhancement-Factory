@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderGate3, renderGate4 } from './artifactRenderers.jsx';
 import { compute } from '../../api/estimate.js';
+import { ceilHours } from '../lib/hoursDisplay.js';
 
 const inputs = {
   entity_changes_count: 0, typelist_changes_count: 1, pcf_changes_count: 0,
@@ -39,6 +40,35 @@ describe('Gate 4 card', () => {
     expect(html).toContain('total');
     expect(html).not.toContain('Hours by track');
     expect(html).not.toContain('P80');
+    // Decimal total (4.5h) is rounded UP to a whole number for display (5h).
+    expect(html).toContain('5h');
+    expect(html).not.toContain('4.5h');
+  });
+
+  it('rounds decimal hours up to whole numbers for display (never shows decimals)', () => {
+    const ce = {
+      hours_by_role: { BA: 1.4, Dev: 2.6, QA: 3.1, Architect: 0.3 }, // sums to 7.4
+      hours_by_location: { Onsite: 0.8, Offshore_India: 5.4, Nearshore: 1.2 },
+      total_hours: 5.3, p80_hours: 8.8, story_points: 2, confidence_band: '±20%',
+      location_split_assumption: 'x', methodology: 'm', assumed_delivery_grade: 'Silver2'
+    };
+    const html = renderToStaticMarkup(renderGate4({ narrative: 'n', computed_estimate: ce }, null, undefined));
+    // 5.3h -> 6h, 8.8h -> 9h (round UP to nearest whole hour)
+    expect(html).toContain('6h');
+    expect(html).toContain('9h');
+    expect(html).not.toContain('5.3h');
+    expect(html).not.toContain('8.8h');
+    // No decimal hour values should ever be rendered.
+    expect(html).not.toMatch(/\d\.\d+h/);
+  });
+
+  it('ceilHours rounds up and never down', () => {
+    expect(ceilHours(5.3)).toBe(6);
+    expect(ceilHours(8.8)).toBe(9);
+    expect(ceilHours(8.9)).toBe(9);
+    expect(ceilHours(6)).toBe(6);
+    expect(ceilHours(0)).toBe(0);
+    expect(ceilHours(undefined)).toBe(0);
   });
 
   it('Gate 3 card shows required/conditional certainty and labels conditional rating impact', () => {

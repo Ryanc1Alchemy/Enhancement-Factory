@@ -295,65 +295,6 @@ export function renderGate4(a, _jiraResult, gate4Extras) {
             </div>
           )}
 
-          {ce.tracks && (
-            <div className="artifact-section">
-              <span className="artifact-label">Hours by track</span>
-              <table className="artifact-table">
-                <thead><tr><th>Track</th><th>Hours</th><th>Covers</th></tr></thead>
-                <tbody>
-                  <tr><td>Implementation</td><td>{ce.tracks.implementation}h</td><td className="muted small">BA analysis + Dev build</td></tr>
-                  <tr><td>Validation</td><td>{ce.tracks.validation}h</td><td className="muted small">QA, scaled to distinct scenarios</td></tr>
-                  <tr><td>Governance</td><td>{ce.tracks.governance}h</td><td className="muted small">Design review, sign-off, release — fixed per change</td></tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {(ce.contingency_drivers?.length > 0 || ce.calculation_trace?.evidence_verification?.dropped_entries?.length > 0) && (
-            <div className="artifact-section">
-              <span className="artifact-label">Not in the P50 — unconfirmed risk</span>
-              <ul className="artifact-list">
-                {(ce.contingency_drivers || []).map((d, i) => <li key={`d${i}`}>{d}</li>)}
-                {(ce.calculation_trace?.evidence_verification?.dropped_entries || []).map((d, i) => (
-                  <li key={`x${i}`}>Evidence discarded: "{d.scenario_title}" is not an approved acceptance criteria scenario</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="artifact-section">
-            <span className="artifact-label">Hours by role</span>
-            <table className="artifact-table">
-              <thead><tr><th>Role</th><th>Hours</th></tr></thead>
-              <tbody>
-                {(() => {
-                  const { hoursByRole } = roundHoursForDisplay(ce.hours_by_role, ce.total_hours);
-                  return Object.entries(hoursByRole).map(([role, h]) => (
-                    <tr key={role}><td>{role}</td><td>{h}h</td></tr>
-                  ));
-                })()}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="artifact-section">
-            <span className="artifact-label">Hours by location</span>
-            <table className="artifact-table">
-              <thead><tr><th>Location</th><th>Hours</th></tr></thead>
-              <tbody>
-                {(() => {
-                  const totalLoc = Object.values(ce.hours_by_location).reduce((s, v) => s + v, 0);
-                  const { hoursByRole: roundedLoc } = roundHoursForDisplay(ce.hours_by_location, totalLoc);
-                  return Object.entries(roundedLoc).map(([loc, h]) => (
-                    <tr key={loc}><td>{loc.replace('_', ' ')}</td><td>{h}h</td></tr>
-                  ));
-                })()}
-              </tbody>
-            </table>
-            <div className="muted small" style={{ marginTop: 6 }}>{ce.location_split_assumption}</div>
-          </div>
-
-          <div className="muted small">Methodology: {ce.methodology}</div>
         </>
       ) : (
         <div className="muted">Estimate computing…</div>

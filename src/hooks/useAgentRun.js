@@ -39,6 +39,7 @@ const initialState = {
   acceptedArtifacts: {}, // accepted artifacts only — passed to backend as prior_artifacts
   previousArtifacts: {}, // pre-regeneration artifact (for diff view)
   gateUsage: {}, // token usage per gate: { '<gate id>': { input_tokens?, output_tokens?, total_tokens? } }
+  jiraIssueType: 'Story', // BA-selected Gate 6 issue type
   conversation: [], // array of { who: 'system'|'user'|'agent', body: string, ts }
   jiraResult: null, // result of /api/runs commit_jira
   guidewireBundle: null, // parsed multi-area Guidewire Studio bundle (optional, attached at start)
@@ -339,7 +340,8 @@ export function useAgentRun({ saveDelayMs = DEFAULT_SAVE_DELAY_MS } = {}) {
       try {
         const res = await api.agent.commitJira({
           request: s.request,
-          prior_artifacts: newAccepted
+          prior_artifacts: newAccepted,
+          jira_issue_type: s.jiraIssueType || 'Story'
         });
         setState(prev => ({
           ...prev,
@@ -663,6 +665,12 @@ export function useAgentRun({ saveDelayMs = DEFAULT_SAVE_DELAY_MS } = {}) {
     }
   }, [setError]);
 
+  const setJiraIssueType = useCallback((issueType) => {
+    const next = String(issueType || '').trim();
+    if (!next) return;
+    setState(prev => ({ ...prev, jiraIssueType: next }));
+  }, []);
+
   const dismissResumeNotes = useCallback(() => {
     setState(prev => ({ ...prev, resumeNotes: [] }));
   }, []);
@@ -687,6 +695,7 @@ export function useAgentRun({ saveDelayMs = DEFAULT_SAVE_DELAY_MS } = {}) {
       reattachFiles,
       runPendingGate,
       dismissResumeNotes,
+      setJiraIssueType,
       reopenGate,
       reset
     }

@@ -165,7 +165,7 @@ export default async function handler(req, res) {
     return errorResponse(res, 400, 'Bad request', err.message);
   }
 
-  const { mode = 'advance', gate, request, prior_artifacts = {}, feedback, previous_artifact, data_dictionary } = body;
+  const { mode = 'advance', gate, request, prior_artifacts = {}, feedback, previous_artifact, data_dictionary, jira_issue_type } = body;
 
   if (!gate || !request) {
     return errorResponse(res, 400, 'gate and request are required');
@@ -178,7 +178,10 @@ export default async function handler(req, res) {
       return errorResponse(res, 400, 'No jira_ticket draft payload to commit');
     }
     try {
-      const result = await createTicket(draft);
+      const result = await createTicket({
+        ...draft,
+        issue_type: jira_issue_type || draft.issue_type
+      });
       return jsonResponse(res, 200, {
         gate: 'jira_ticket',
         gate_name: 'Jira Ticket',

@@ -17,6 +17,24 @@ function jiraConfigured() {
   );
 }
 
+function isLiveEnabled() {
+  // Safety switch for implementation/testing phases.
+  // Default OFF unless explicitly set to "true".
+  return String(process.env.JIRA_LIVE_ENABLED || '').toLowerCase() === 'true';
+}
+
+function allowedIssueTypes() {
+  return String(process.env.JIRA_ALLOWED_ISSUE_TYPES || 'Story,Epic')
+    .split(',')
+    .map(x => x.trim())
+    .filter(Boolean);
+}
+
+function normalizedIssueType(input) {
+  const requested = String(input || '').trim();
+  return requested || 'Story';
+}
+
 function authHeader() {
   const token = Buffer.from(
     `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
@@ -39,12 +57,23 @@ function toADF(text) {
 }
 
 export async function createTicket(payload) {
-  if (!jiraConfigured()) {
+  const issueType = normalizedIssueType(payload.issue_type);
+  const allowed = allowedIssueTypes();
+  if (!allowed.some(t => t.toLowerCase() === issueType.toLowerCase())) {
+    return {
+      mode: 'error',
+      error: `Issue type "${issueType}" is not allowed`,
+      detail: `Allowed issue types: ${allowed.join(', ')}`
+    };
+  }
+
+  if (!isLiveEnabled() || !jiraConfigured()) {
     return {
       mode: 'simulated',
       reason:
         'Jira environment variables are not set. The payload below is what would have been sent. ' +
-        'Set JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_PROJECT_KEY in Vercel to enable real ticket creation.',
+        'Live Jira is disabled or Jira environment variables are not set. ' +
+        'Set JIRA_LIVE_ENABLED=true and configure JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_PROJECT_KEY in Vercel to enable real ticket creation.',
       simulated_ticket: {
         key: `${process.env.JIRA_PROJECT_KEY || 'GWDEMO'}-XXXX`,
         url: '#',
@@ -68,7 +97,7 @@ export async function createTicket(payload) {
       project: { key: process.env.JIRA_PROJECT_KEY },
       summary: payload.summary,
       description: toADF(fullDescription),
-      issuetype: { name: payload.issue_type || 'Story' },
+      issuetype: { name: issueType },
       labels: payload.labels || [],
       // Components must already exist in the Jira project. If they don't, the call
       // fails — handled below with a clean fallback.
@@ -142,13 +171,53 @@ export async function createTicket(payload) {
   }
 
   const data = await response.json();
+  const ticket = {
+    key: data.key,
+    id: data.id,
+    url: `${process.env.JIRA_BASE_URL}/browse/${data.key}`
+  };
+
+  let link_result = null;
+  const contextIssueKey = String(process.env.JIRA_CONTEXT_ISSUE_KEY || '').trim();
+  if (contextIssueKey) {
+    const linkType = String(process.env.JIRA_LINK_TYPE || 'Relates').trim();
+    const linkResponse = await fetch(`${process.env.JIRA_BASE_URL}/rest/api/3/issueLink`, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader(),
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        type: { name: linkType },
+        inwardIssue: { key: ticket.key },
+        outwardIssue: { key: contextIssueKey }
+      })
+    });
+
+    if (!linkResponse.ok) {
+      let detail = '';
+      try { detail = await linkResponse.text(); } catch (_) {}
+      link_result = {
+        ok: false,
+        error: `Issue created, but linking failed (${linkResponse.status})`,
+        detail
+      };
+    } else {
+      link_result = {
+        ok: true,
+        type: linkType,
+        target: contextIssueKey
+      };
+    }
+  }
+
   return {
     mode: 'live',
-    ticket: {
-      key: data.key,
-      id: data.id,
-      url: `${process.env.JIRA_BASE_URL}/browse/${data.key}`
-    }
+    issue_type: issueType,
+    context_issue_key: contextIssueKey || null,
+    ticket,
+    link_result
   };
 }
 
